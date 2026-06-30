@@ -1,0 +1,147 @@
+appId: com.cartha.app
+testID: 300-invalid-deep-links-error-handling
+
+# Maestro E2E Test: Invalid Deep-Links Error Handling
+# 
+# Tests BUG #1, #6, #8, #10 from TEST_STRATEGY.md
+# Verifies that invalid resource IDs show error messages instead of silent fallbacks
+#
+# Broken Flows Tested:
+#   - /groups/INVALIDCODE → should show "Group not found"
+#   - /meet/room/INVALIDID → should show "Room not found"
+#   - /moments/INVALIDID → should show "Moment not found"
+#   - /watch/clips/INVALIDID → should show error, not silent fallback to feed
+
+commands:
+  - launchApp:
+      clearState: true
+      permissions:
+        - calendar
+        - contacts
+        - microphone
+        - camera
+
+  # ============================================================
+  # Test 1: Groups Invalid Code → Error Modal (BUG #1)
+  # ============================================================
+  
+  - label: "Test 1: Invalid Group Code"
+  - openLink:
+      url: "app://cartha.com/groups/INVALIDGROUPCODE123"
+  
+  - wait:
+      timeout: 3000
+  
+  - assertVisible:
+      text: "Group not found"
+  
+  - tapButton:
+      id: "ErrorModal.dismiss"
+  
+  - assertVisible:
+      text: "Messages"  # Should be back on home/messages
+  
+  # ============================================================
+  # Test 2: Meet Room Invalid ID → Error (BUG #6)
+  # ============================================================
+  
+  - label: "Test 2: Invalid Room ID"
+  - openLink:
+      url: "app://cartha.com/meet/room/invalid-room-id-xyz"
+  
+  - wait:
+      timeout: 3000
+  
+  - assertVisible:
+      text: "Room not found"
+  
+  - assertVisible:
+      text: "Failed to load meeting room"
+  
+  - tapButton:
+      id: "ErrorModal.dismiss"
+  
+  - assertVisible:
+      text: "Meet"  # Back on meet home
+  
+  # ============================================================
+  # Test 3: Moments Invalid ID → Error (BUG #8)
+  # ============================================================
+  
+  - label: "Test 3: Invalid Moment ID"
+  - openLink:
+      url: "app://cartha.com/moments/invalid-moment-123"
+  
+  - wait:
+      timeout: 3000
+  
+  - assertVisible:
+      text: "Moment not found"
+  
+  - assertVisible:
+      text: "This moment may have been deleted"
+  
+  - tapButton:
+      id: "ErrorModal.dismiss"
+  
+  - assertVisible:
+      text: "Moments"  # Back on moments
+  
+  # ============================================================
+  # Test 4: Watch Clip Invalid ID → Error (BUG #10)
+  # ============================================================
+  
+  - label: "Test 4: Invalid Clip ID"
+  - openLink:
+      url: "app://cartha.com/watch/clips/invalid-clip-id"
+  
+  - wait:
+      timeout: 3000
+  
+  - assertVisible:
+      text: "Video not found"
+  
+  - assertVisible:
+      text: "This clip may no longer be available"
+  
+  - tapButton:
+      id: "ErrorModal.dismiss"
+  
+  - assertVisible:
+      text: "Watch"  # Back on watch home
+  
+  # ============================================================
+  # Test 5: Valid Deep-Links Still Work (Regression)
+  # ============================================================
+  
+  - label: "Test 5: Valid Deep-Link Regression"
+  - openLink:
+      url: "app://cartha.com/bible/genesis/1"
+  
+  - wait:
+      timeout: 2000
+  
+  - assertVisible:
+      text: "Genesis"
+  
+  - assertVisible:
+      text: "Chapter 1"
+  
+  # Back
+  - tapButton:
+      id: "BackButton"
+  
+  - assertVisible:
+      text: "Bible"
+
+onFailure:
+  - takeScreenshot: "invalid-deep-links-test-failure.png"
+
+# ============================================================
+# Summary:
+# - Tests 4 broken flows (invalid groups, rooms, moments, clips)
+# - Verifies error modals appear (not silent fallbacks)
+# - Confirms recovery paths (dismiss modal, navigate back)
+# - Regression tests valid deep-links still work
+# - Records video evidence of each flow
+# ============================================================
