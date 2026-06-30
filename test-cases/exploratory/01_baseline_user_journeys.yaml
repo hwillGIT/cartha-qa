@@ -1,0 +1,305 @@
+appId: com.cartha.app
+testID: exploratory-baseline-user-journeys
+
+# EXPLORATORY TEST: Baseline User Journeys
+#
+# Goal: Follow typical user paths and look for broken flows
+# Approach: Intentionally trigger edge cases and validate recovery
+# Evidence: Screenshots capture any broken states
+#
+# Questions answered:
+#   - Do common user journeys complete successfully?
+#   - Are error states handled gracefully?
+#   - Do silent fallbacks occur?
+#   - Is there clear feedback to users?
+
+commands:
+  - launchApp:
+      clearState: true
+      permissions:
+        - calendar
+        - contacts
+        - microphone
+        - camera
+
+  # ============================================================
+  # JOURNEY 1: New User Onboarding
+  # ============================================================
+  
+  - label: "Journey 1: New User Onboarding"
+  - assertVisible:
+      text: "Sign Up"
+  
+  - takeScreenshot: "01-onboarding-signin.png"
+  
+  # Try sign up flow (may not complete due to email verification)
+  - tapButton:
+      id: "SignUpButton"
+  
+  - wait:
+      timeout: 2000
+  
+  - takeScreenshot: "02-signup-form.png"
+  
+  # Skip signup, try login instead (or use existing account)
+  - tapButton:
+      id: "BackButton"
+  
+  - wait:
+      timeout: 1000
+  
+  # ============================================================
+  # JOURNEY 2: Watch Feature
+  # ============================================================
+  
+  - label: "Journey 2: Watch Feature Exploration"
+  - tapButton:
+      id: "BottomNav.Watch"
+  
+  - wait:
+      timeout: 3000
+  
+  - takeScreenshot: "03-watch-home.png"
+  
+  # Look for categories
+  - assertVisible:
+      text: "Categories"
+  
+  # Scroll down to see content
+  - scroll:
+      direction: down
+      amount: 3
+  
+  - wait:
+      timeout: 1000
+  
+  - takeScreenshot: "04-watch-content-feed.png"
+  
+  # Try clicking a video (if visible)
+  - tapButton:
+      id: "VideoCard.0"
+  
+  - wait:
+      timeout: 2000
+  
+  - takeScreenshot: "05-watch-video-player.png"
+  
+  # Go back
+  - tapButton:
+      id: "BackButton"
+  
+  - wait:
+      timeout: 1000
+  
+  # ============================================================
+  # JOURNEY 3: Bible Feature
+  # ============================================================
+  
+  - label: "Journey 3: Bible Feature Exploration"
+  - tapButton:
+      id: "BottomNav.Bible"
+  
+  - wait:
+      timeout: 3000
+  
+  - takeScreenshot: "06-bible-home.png"
+  
+  # Look for book list or search
+  - scroll:
+      direction: down
+      amount: 2
+  
+  - wait:
+      timeout: 1000
+  
+  - takeScreenshot: "07-bible-books.png"
+  
+  # Try selecting Genesis (if visible)
+  - tapButton:
+      id: "BookCard.genesis"
+  
+  - wait:
+      timeout: 2000
+  
+  - takeScreenshot: "08-genesis-chapters.png"
+  
+  # Go back
+  - tapButton:
+      id: "BackButton"
+  
+  - wait:
+      timeout: 1000
+  
+  # ============================================================
+  # JOURNEY 4: Groups Feature
+  # ============================================================
+  
+  - label: "Journey 4: Groups Feature - Join Group"
+  - tapButton:
+      id: "BottomNav.Messages"  # Groups usually in Messages
+  
+  - wait:
+      timeout: 3000
+  
+  - takeScreenshot: "09-messages-home.png"
+  
+  # Look for "Join Group" button
+  - scroll:
+      direction: down
+      amount: 2
+  
+  - wait:
+      timeout: 1000
+  
+  - takeScreenshot: "10-groups-section.png"
+  
+  # Try joining with valid code (if available)
+  - tapButton:
+      id: "JoinGroupButton"
+  
+  - wait:
+      timeout: 1000
+  
+  - takeScreenshot: "11-group-code-input.png"
+  
+  # Try with INVALID code to see error handling
+  - fillInput:
+      id: "GroupCodeInput"
+      text: "INVALIDGROUPCODE123"
+  
+  - tapButton:
+      id: "JoinButton"
+  
+  - wait:
+      timeout: 3000
+  
+  - takeScreenshot: "12-invalid-group-code-result.png"
+  
+  # QUESTION: Does error modal appear or silent fallback?
+  # If modal appears: BUG NOT REPRODUCED (good!)
+  # If silently goes to onboarding: BUG-001 CONFIRMED
+  
+  # Try dismiss if modal appeared
+  - tapButton:
+      id: "ErrorModal.dismiss"
+  
+  - wait:
+      timeout: 1000
+  
+  # ============================================================
+  # JOURNEY 5: Meet Feature
+  # ============================================================
+  
+  - label: "Journey 5: Meet Feature Exploration"
+  - tapButton:
+      id: "BottomNav.Meet"
+  
+  - wait:
+      timeout: 3000
+  
+  - takeScreenshot: "13-meet-home.png"
+  
+  # Look for browse rooms or create room
+  - scroll:
+      direction: down
+      amount: 2
+  
+  - wait:
+      timeout: 1000
+  
+  - takeScreenshot: "14-meet-options.png"
+  
+  # Try "Browse Rooms" if visible
+  - tapButton:
+      id: "BrowseRoomsButton"
+  
+  - wait:
+      timeout: 2000
+  
+  - takeScreenshot: "15-meet-rooms-list.png"
+  
+  # QUESTION: Does /meet/rooms work or dead-end?
+  
+  # Go back
+  - tapButton:
+      id: "BackButton"
+  
+  - wait:
+      timeout: 1000
+  
+  # ============================================================
+  # JOURNEY 6: Moments Feature
+  # ============================================================
+  
+  - label: "Journey 6: Moments Feature Exploration"
+  - tapButton:
+      id: "BottomNav.Moments"
+  
+  - wait:
+      timeout: 3000
+  
+  - takeScreenshot: "16-moments-home.png"
+  
+  # Look for moments feed or create button
+  - scroll:
+      direction: down
+      amount: 3
+  
+  - wait:
+      timeout: 1000
+  
+  - takeScreenshot: "17-moments-feed.png"
+  
+  # QUESTION: Is empty state clear? Any loading spinners?
+  
+  # Try creating moment (if button visible)
+  - tapButton:
+      id: "CreateMomentButton"
+  
+  - wait:
+      timeout: 2000
+  
+  - takeScreenshot: "18-create-moment-form.png"
+  
+  # Cancel create
+  - tapButton:
+      id: "CancelButton"
+  
+  - wait:
+      timeout: 1000
+  
+  # ============================================================
+  # SUMMARY
+  # ============================================================
+  
+  - label: "Exploratory test complete"
+  - takeScreenshot: "19-final-home.png"
+
+onFailure:
+  - takeScreenshot: "FAILURE-baseline-journey.png"
+
+# ============================================================
+# WHAT TO LOOK FOR IN SCREENSHOTS:
+# ============================================================
+#
+# 1. SILENT FALLBACKS
+#    - Did app go to unexpected screen?
+#    - Were there no error messages?
+#    - Example: Group join → onboarding instead of error
+#
+# 2. MISSING ERROR STATES
+#    - Invalid inputs (group codes, etc) → error modal?
+#    - Broken routes → 404 page in-app?
+#    - Network issues → error message?
+#
+# 3. UNCLEAR UX
+#    - Empty states → helpful message?
+#    - Loading states → spinner or frozen?
+#    - Errors → actionable next step?
+#
+# 4. UNEXPECTED BEHAVIOR
+#    - Routes that don't exist → domain redirect?
+#    - Gated features (plan, meet/create) → signin modal?
+#    - Invalid deep-links → graceful fallback?
+#
+# ============================================================

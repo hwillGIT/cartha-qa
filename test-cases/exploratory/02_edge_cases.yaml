@@ -1,0 +1,374 @@
+appId: com.cartha.app
+testID: exploratory-edge-cases
+
+# EXPLORATORY TEST: Edge Cases & Stress Tests
+#
+# Goal: Find error states that aren't handled gracefully
+# Approach: Push the app to limits and watch for crashes/hangs
+# Evidence: Screenshots capture unexpected behavior
+#
+# Questions answered:
+#   - Does the app crash under stress?
+#   - Are empty states handled gracefully?
+#   - Does rapid navigation break state?
+#   - Can interruptions (deep-links, etc) be handled?
+
+commands:
+  - launchApp:
+      clearState: true
+      permissions:
+        - calendar
+        - contacts
+        - microphone
+        - camera
+
+  # ============================================================
+  # EDGE CASE 1: Empty States
+  # ============================================================
+  
+  - label: "Edge Case 1: Empty State Handling"
+  
+  - tapButton:
+      id: "BottomNav.Moments"
+  
+  - wait:
+      timeout: 3000
+  
+  - takeScreenshot: "edge-01-moments-empty-state.png"
+  
+  # QUESTION: Is empty state clear? Does app hang or show spinner?
+  # What does the user see if there are no moments?
+  # Is there helpful text like "No moments yet. Create one!"?
+  
+  - tapButton:
+      id: "BottomNav.Meet"
+  
+  - wait:
+      timeout: 3000
+  
+  - takeScreenshot: "edge-02-meet-empty-state.png"
+  
+  # QUESTION: Same for meet. Are rooms listed? Is list empty?
+  
+  # ============================================================
+  # EDGE CASE 2: Rapid Navigation Between Tabs
+  # ============================================================
+  
+  - label: "Edge Case 2: Rapid Tab Navigation"
+  
+  # Tap tabs rapidly to trigger state transitions
+  - tapButton:
+      id: "BottomNav.Watch"
+  
+  - wait:
+      timeout: 300
+  
+  - tapButton:
+      id: "BottomNav.Bible"
+  
+  - wait:
+      timeout: 300
+  
+  - tapButton:
+      id: "BottomNav.Meet"
+  
+  - wait:
+      timeout: 300
+  
+  - tapButton:
+      id: "BottomNav.Messages"
+  
+  - wait:
+      timeout: 300
+  
+  - tapButton:
+      id: "BottomNav.Watch"
+  
+  - wait:
+      timeout: 2000
+  
+  - takeScreenshot: "edge-03-rapid-nav-result.png"
+  
+  # QUESTION: Did app crash? Broken state? Blank screen?
+  # Is UI responsive or frozen?
+  
+  # ============================================================
+  # EDGE CASE 3: Deep-Link During Feature Load
+  # ============================================================
+  
+  - label: "Edge Case 3: Deep-Link While Feature Loading"
+  
+  - tapButton:
+      id: "BottomNav.Watch"
+  
+  - wait:
+      timeout: 500  # Only wait half-load time
+  
+  # While Watch is loading, trigger a deep-link
+  - openLink:
+      url: "app://cartha.com/bible/genesis/1"
+  
+  - wait:
+      timeout: 3000
+  
+  - takeScreenshot: "edge-04-deeplink-during-load.png"
+  
+  # QUESTION: Did deep-link interrupt loading gracefully?
+  # Did app navigate to Bible? Or stay on Watch?
+  # Is there any broken state?
+  
+  # ============================================================
+  # EDGE CASE 4: Invalid Search Inputs
+  # ============================================================
+  
+  - label: "Edge Case 4: Search with Special Characters"
+  
+  - tapButton:
+      id: "SearchButton"
+  
+  - wait:
+      timeout: 1000
+  
+  - fillInput:
+      id: "SearchInput"
+      text: "<script>alert('xss')</script>"
+  
+  - wait:
+      timeout: 500
+  
+  - tapButton:
+      id: "SearchButton"
+  
+  - wait:
+      timeout: 2000
+  
+  - takeScreenshot: "edge-05-search-special-chars.png"
+  
+  # QUESTION: Did app crash? Display broken?
+  # Are special chars escaped or do they break UI?
+  # Security: Is XSS possible? (Should be no, but test anyway)
+  
+  - tapButton:
+      id: "BackButton"
+  
+  # Try SQL-like injection
+  - tapButton:
+      id: "SearchButton"
+  
+  - wait:
+      timeout: 1000
+  
+  - fillInput:
+      id: "SearchInput"
+      text: "'; DROP TABLE users; --"
+  
+  - wait:
+      timeout: 500
+  
+  - tapButton:
+      id: "SearchButton"
+  
+  - wait:
+      timeout: 2000
+  
+  - takeScreenshot: "edge-06-search-sql-injection.png"
+  
+  # QUESTION: Does app handle it? Show error? Crash?
+  
+  - tapButton:
+      id: "BackButton"
+  
+  # ============================================================
+  # EDGE CASE 5: Scroll to Very Bottom of Lists
+  # ============================================================
+  
+  - label: "Edge Case 5: Scroll to Bottom on Long Lists"
+  
+  - tapButton:
+      id: "BottomNav.Watch"
+  
+  - wait:
+      timeout: 2000
+  
+  - scroll:
+      direction: down
+      amount: 10
+  
+  - wait:
+      timeout: 1000
+  
+  - scroll:
+      direction: down
+      amount: 10
+  
+  - wait:
+      timeout: 1000
+  
+  - takeScreenshot: "edge-07-watch-scroll-bottom.png"
+  
+  # QUESTION: Does pagination load more content?
+  # Or do we hit bottom gracefully?
+  # Are there infinite scroll issues?
+  
+  - tapButton:
+      id: "BottomNav.Bible"
+  
+  - wait:
+      timeout: 2000
+  
+  - scroll:
+      direction: down
+      amount: 20
+  
+  - wait:
+      timeout: 1000
+  
+  - takeScreenshot: "edge-08-bible-scroll-bottom.png"
+  
+  # QUESTION: Can we scroll past all books?
+  # Does pagination work?
+  
+  # ============================================================
+  # EDGE CASE 6: Back Button From Deep Route
+  # ============================================================
+  
+  - label: "Edge Case 6: Back Button Navigation"
+  
+  - openLink:
+      url: "app://cartha.com/bible/genesis/1"
+  
+  - wait:
+      timeout: 3000
+  
+  - takeScreenshot: "edge-09-deeplink-genesis.png"
+  
+  # Now tap back multiple times
+  - tapButton:
+      id: "BackButton"
+  
+  - wait:
+      timeout: 1000
+  
+  - takeScreenshot: "edge-10-back-from-genesis.png"
+  
+  # QUESTION: Does back button work? Do we go to Bible home?
+  # Or further back? Or break?
+  
+  - tapButton:
+      id: "BackButton"
+  
+  - wait:
+      timeout: 1000
+  
+  - takeScreenshot: "edge-11-back-again.png"
+  
+  # ============================================================
+  # EDGE CASE 7: Multiple Modals/Dialogs
+  # ============================================================
+  
+  - label: "Edge Case 7: Stacked Modals"
+  
+  - tapButton:
+      id: "BottomNav.Messages"
+  
+  - wait:
+      timeout: 2000
+  
+  # Open first dialog
+  - tapButton:
+      id: "JoinGroupButton"
+  
+  - wait:
+      timeout: 1000
+  
+  - takeScreenshot: "edge-12-modal-1.png"
+  
+  # Try opening another modal while first is open
+  # (May not be possible depending on app design)
+  - tapButton:
+      id: "MoreButton"
+  
+  - wait:
+      timeout: 1000
+  
+  - takeScreenshot: "edge-13-modal-2.png"
+  
+  # QUESTION: Does UI handle stacked modals?
+  # Or does second modal dismiss the first?
+  
+  - tapButton:
+      id: "DismissButton"
+  
+  - wait:
+      timeout: 1000
+  
+  # ============================================================
+  # EDGE CASE 8: Text Field Overflow
+  # ============================================================
+  
+  - label: "Edge Case 8: Long Text Input"
+  
+  - tapButton:
+      id: "JoinGroupButton"
+  
+  - wait:
+      timeout: 1000
+  
+  - fillInput:
+      id: "GroupCodeInput"
+      text: "VERYLONGCODEWITHOUTSPACESSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS"
+  
+  - wait:
+      timeout: 1000
+  
+  - takeScreenshot: "edge-14-long-text-input.png"
+  
+  # QUESTION: Does text overflow break UI?
+  # Is input field limited? Is there visible scrolling?
+  
+  - tapButton:
+      id: "DismissButton"
+  
+  - wait:
+      timeout: 1000
+  
+  # ============================================================
+  # SUMMARY
+  # ============================================================
+  
+  - label: "Exploratory edge case tests complete"
+  - takeScreenshot: "edge-15-final-state.png"
+
+onFailure:
+  - takeScreenshot: "FAILURE-edge-cases.png"
+
+# ============================================================
+# WHAT TO LOOK FOR:
+# ============================================================
+#
+# CRASHES / HANGS:
+#   - App freeze on rapid navigation
+#   - Blank screen after rapid actions
+#   - Unhandled exceptions in logs
+#
+# STATE CORRUPTION:
+#   - After rapid nav, UI shows wrong data
+#   - Stale cached content displayed
+#   - Mixed content from different screens
+#
+# INCOMPLETE FEATURES:
+#   - Empty states with no UI
+#   - "This feature not implemented" messages
+#   - Dead-end routes (/meet/rooms)
+#
+# OVERFLOW / LAYOUT ISSUES:
+#   - Text that doesn't fit
+#   - Buttons cut off screen
+#   - Scrolling doesn't work
+#
+# INPUT VALIDATION:
+#   - Special chars crash the app
+#   - Very long inputs break UI
+#   - Security issues (XSS, injection)
+#
+# ============================================================
