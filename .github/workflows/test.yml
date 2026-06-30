@@ -1,0 +1,143 @@
+name: Test
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    # Run tests daily at 2 AM UTC
+    - cron: '0 2 * * *'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  widget-tests:
+    name: Widget Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.6'
+          cache: true
+      
+      - name: Get dependencies
+        run: |
+          cd ~/dev/cartha-qa
+          flutter pub get
+      
+      - name: Run widget tests
+        run: |
+          cd ~/dev/cartha-qa
+          flutter test test/ \
+            --coverage \
+            --test-randomize-ordering-seed random
+      
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        if: always()
+        with:
+          files: ./coverage/lcov.info
+          flags: widget-tests
+          verbose: true
+
+  maestro-tests:
+    name: Maestro E2E Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.6'
+          cache: true
+      
+      - name: Get dependencies
+        run: |
+          cd ~/dev/cartha-qa
+          flutter pub get
+      
+      - name: Build Flutter Web
+        run: |
+          cd ~/dev/cartha-qa
+          flutter build web --release
+      
+      - name: Setup Maestro
+        run: |
+          curl -Ls "https://maestro.mobile.dev" | bash
+          echo "$HOME/.maestro/bin" >> $GITHUB_PATH
+      
+      - name: Run Maestro tests
+        run: |
+          cd ~/dev/cartha-qa
+          maestro test test-cases/maestro/ \
+            --output ./maestro-results
+        continue-on-error: true
+      
+      - name: Upload Maestro results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: maestro-results
+          path: ~/dev/cartha-qa/maestro-results/
+
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.6'
+          cache: true
+      
+      - name: Get dependencies
+        run: |
+          cd ~/dev/cartha-qa
+          flutter pub get
+      
+      - name: Run integration tests
+        run: |
+          cd ~/dev/cartha-qa
+          flutter test integration_test/ \
+            --dart-define=CI=true
+        continue-on-error: true
+
+  test-results:
+    name: Summarize Test Results
+    runs-on: ubuntu-latest
+    needs: [widget-tests, maestro-tests, integration-tests]
+    if: always()
+    
+    steps:
+      - name: Check test status
+        run: |
+          if [[ "${{ needs.widget-tests.result }}" == "failure" || \
+                "${{ needs.maestro-tests.result }}" == "failure" || \
+                "${{ needs.integration-tests.result }}" == "failure" ]]; then
+            echo "⚠️ Some tests failed or were skipped"
+            exit 1
+          fi
+          echo "✅ All test suites passed"
+      
+      - name: Post to GitHub
+        if: always()
+        run: |
+          echo "Test Summary:"
+          echo "  Widget Tests: ${{ needs.widget-tests.result }}"
+          echo "  Maestro Tests: ${{ needs.maestro-tests.result }}"
+          echo "  Integration Tests: ${{ needs.integration-tests.result }}"

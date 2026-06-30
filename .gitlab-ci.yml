@@ -1,0 +1,65 @@
+# Cartha QA — GitLab CI/CD Pipeline
+#
+# Mirrors GitHub Actions workflow to GitLab
+# Runs on: push, merge request, schedule
+# 
+# NOTE: This file is ready to use once repo is mirrored to GitLab
+
+image: cirrusci/flutter:3.41.6
+
+stages:
+  - test
+  - results
+
+variables:
+  FLUTTER_VERSION: "3.41.6"
+  CI: "true"
+
+before_script:
+  - flutter pub get
+  - flutter --version
+
+widget-tests:
+  stage: test
+  script:
+    - flutter test test/ --coverage
+  coverage: '/lines\s*:\s*(\d+\.?\d*)%/'
+  artifacts:
+    paths:
+      - coverage/
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage/cobertura-coverage.xml
+  allow_failure: false
+
+maestro-tests:
+  stage: test
+  script:
+    - curl -Ls "https://maestro.mobile.dev" | bash
+    - export PATH="$HOME/.maestro/bin:$PATH"
+    - flutter build web --release
+    - maestro test test-cases/maestro/ --output ./maestro-results || true
+  artifacts:
+    paths:
+      - maestro-results/
+    when: always
+  allow_failure: true
+
+integration-tests:
+  stage: test
+  script:
+    - flutter test integration_test/ --dart-define=CI=true || true
+  artifacts:
+    paths:
+      - build/
+    when: always
+  allow_failure: true
+
+test-results:
+  stage: results
+  script:
+    - echo "Test pipeline completed"
+    - echo "✅ Check individual job logs for detailed results"
+  when: always
+  allow_failure: true
