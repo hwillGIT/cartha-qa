@@ -1,0 +1,64 @@
+appId: com.cartha.app
+tags:
+  - connect
+  - deep-link
+  - universal-link
+  - qa
+  - regression
+  - exception-flow
+---
+# Exception-flow coverage for an invalid / expired party deep link while the
+# user is ALREADY SIGNED IN.
+#
+# Gap source: docs/EXCEPTION_FLOW_GAP_MATRIX.md — "Deep-link 404 / invalid
+# route" had ZERO flows and ZERO widget tests. The existing
+# 112_party_join_deep_link.yaml only proves the signed-OUT redirect to auth;
+# it never exercises PartyJoinByCodeScreen's dead-end state for a logged-in
+# user whose /join/:code points at a missing/expired party.
+#
+# qa_sweep stages this flow with a deliberately bad share code (see
+# qa_sweep.sh `data_json` for 112_party_join_deep_link.yaml ->
+# {"share_code":"QA-MISSING-PARTY"}). With a token present,
+# PartyJoinByCodeScreen._joinParty() resolves PublicPartyService -> null and
+# renders the error dead-end with a single "Go Back" recovery affordance.
+#
+# Precondition (provided by the harness, mirrors 41_session_expired_notice):
+#   - signed-in session (QA Login Sarah Tester / testuser1@yopmail.com)
+#   - app cold-started onto /join/QA-MISSING-PARTY
+- launchApp:
+    stopApp: true
+
+- waitForAnimationToEnd:
+    timeout: 15000
+
+# Dismiss the guest TOS gate if it appears (cold start can surface it first).
+- runFlow:
+    when:
+      visible: "I Agree to Terms & Continue"
+    commands:
+      - tapOn: "I Agree to Terms & Continue"
+      - waitForAnimationToEnd:
+          timeout: 6000
+
+# The join screen briefly shows a "Joining party..." spinner before the
+# lookup fails. Wait for the resolved dead-end rather than the spinner.
+- extendedWaitUntil:
+    visible: "Party not found or has expired."
+    timeout: 20000
+
+# The dead-end must be explicit and must NOT silently drop the user onto a
+# blank screen or the lobby.
+- assertVisible: "Party not found or has expired."
+- assertVisible: "Go Back"
+- assertNotVisible: "Joining party..."
+
+- takeScreenshot: "201_party_join_invalid_code_dead_end"
+
+# The single recovery affordance must actually escape the dead-end.
+- tapOn: "Go Back"
+- waitForAnimationToEnd:
+    timeout: 6000
+
+- assertNotVisible: "Party not found or has expired."
+
+- takeScreenshot: "201_party_join_invalid_code_recovered"

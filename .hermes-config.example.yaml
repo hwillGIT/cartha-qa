@@ -1,0 +1,38 @@
+# Hermes Config Example for Cartha QA Work
+#
+# This shows the model routing setup for cartha-qa delegation.
+# Copy relevant sections into your ~/.hermes/config.yaml if not already set.
+
+# ── Model Routing (Per-Job) ────────────────────────────────────────────────
+#
+# Enables delegating QA/coding tasks to different models:
+# - qa:        Opus (deep reasoning for edge cases)
+# - coding:    Sonnet (sufficient for logic, fast)
+# - research:  Opus (for synthesis & understanding)
+# - default:   Haiku (scripting, cheap baseline)
+#
+# Usage in delegation:
+#   delegate_task(
+#     goal="...",
+#     model={'provider': 'anthropic', 'model': 'claude-opus-4-1-20250805'}
+#   )
+#
+# Or (if Hermes supports profile shorthand):
+#   delegate_task(goal="...", model_profile='qa')
+
+delegation:
+  max_iterations: 50
+  max_concurrent_children: 8
+  model_profiles:
+    qa:
+      provider: anthropic
+      model: claude-opus-4-1-20250805
+    coding:
+      provider: anthropic
+      model: claude-sonnet-4-20250514
+    research:
+      provider: anthropic
+      model: claude-opus-4-1-20250805
+    default:
+      provider: anthropic
+      model: claude-haiku-4-5-20251001

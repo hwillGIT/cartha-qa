@@ -1,0 +1,43 @@
+# Flutter / Dart
+.dart_tool/
+build/
+.packages
+*.g.dart
+*.freezed.dart
+pubspec.lock
+.pub/
+
+# Screenshots & findings (local, large files)
+findings/screenshots/
+findings/logs/
+*.png
+*.jpg
+*.jpeg
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Maestro
+.maestro_cache/
+
+# Test coverage
+coverage/
+*.lcov
+
+# Build artifacts
+dist/
+release/
