@@ -13,6 +13,10 @@ on:
         description: "Master seed (default: run date)"
         required: false
         default: ""
+      ref:
+        description: "Branch, tag, or commit SHA to test (default: main)"
+        required: false
+        default: "main"
 
 env:
   HARNESS_SEED: ${{ github.event.inputs.seed || format('{0}-nightly', github.run_id) }}
@@ -41,11 +45,13 @@ jobs:
           repository: zackseyun/cartha.ai.mobile
           token: ${{ secrets.CARTHA_REPO_SECRET }}
           path: cartha.ai.mobile
+          ref: ${{ github.event.inputs.ref || 'main' }}
       - uses: actions/checkout@v4
         with:
           repository: zackseyun/cartha.website
           token: ${{ secrets.CARTHA_REPO_SECRET }}
           path: cartha.website
+          ref: ${{ github.event.inputs.ref || 'main' }}
       - name: Add toolchain to PATH
         run: |
           # mini uses ~/dev, macbook uses ~/toolchain (+ brew for node/go)
