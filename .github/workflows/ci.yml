@@ -47,7 +47,10 @@ jobs:
           token: ${{ secrets.CARTHA_REPO_SECRET }}
           path: cartha.website
       - name: Install harness CLI
-        run: pip install ./cartha-qa/harness
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install ./cartha-qa/harness
+          echo "$(python3 -c 'import site; print(site.USER_BASE)')/bin" >> "$GITHUB_PATH"
       - name: Run deterministic smoke
         run: |
           harness run-smoke \
