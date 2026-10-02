@@ -9,8 +9,8 @@ Live status. Updated at every phase completion.
 | Pipeline diagram | Done | `harness/cicd-pipeline.png` |
 | README | Done | `harness/README.md` |
 | Phase 0 — Coverage assessment | Done | `harness/phase0-coverage-assessment.md` |
-| Phase 1 — Scaffold (manifest, contract, CLI) | Next | — |
-| Phase 2 — Production verification | Queued | — |
+| Phase 1 — Scaffold (manifest, contract, CLI) | Done | `harness/` package, DETERMINISM.md, smoke manifests, thin CI |
+| Phase 2 — Production verification | Next | wire verify-prod to release flow, alert destination |
 | Phase 3 — Exploratory loop | Queued | — |
 | Phase 4 — Desktop E2E | Queued | — |
 | Phase 5 — Backend E2E | Queued | — |
