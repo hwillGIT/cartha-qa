@@ -1,18 +1,16 @@
 # Cartha Test Harness — Strategy & Plan
 
 **Status:** Draft for review. Nothing here runs until the plan is approved.
-**Owner:** Hubert Williams. **Date:** 2026-10-02.
+**Date:** 2026-10-02.
 
 ## The decision
 
 Build a three-loop verification system for Cartha's mobile, web, and desktop
-apps that runs **in parallel with releases, never blocking them**. Zack ships
-when he is ready. The harness verifies what shipped, warns about defects before
+apps that run **in parallel with releases, never blocking them**. The harness verifies what shipped, warns about defects before
 users report them, and gets faster over time until it keeps pace with his
 release speed.
 
-Why this shape: most defects are minor annoyances and Zack fixes showstoppers
-fast. The harness does not gate him — it gives early warning. Speed is the
+Why this shape: most defects are minor annoyances and showstoppers get fixed fast. The harness does not gate him — it gives early warning. Speed is the
 primary design constraint.
 
 ## The three loops
@@ -25,12 +23,12 @@ corpus only grows; nothing removes coverage without a recorded decision. Every
 run emits a reproducibility manifest (repo SHAs, app version, seed, clock,
 tool versions, environment, test selection).
 
-**Loop 2 — Production verification.** Runs after Zack ships, asynchronously. A
+**Loop 2 — Production verification.** Runs after each release, asynchronously. A
 small fast smoke suite against the deployed production build, recording the
 exact app version under test. Dedicated test accounts. Strictly
 non-destructive: no purchases, no uploads, no matchmaking, no messages to real
-users. If Zack outruns the harness, reports are version-aware — they always
-say which build was actually verified.
+users. Reports are version-aware — they always say which build was actually
+verified, even when releases ship faster than verification can keep up.
 
 **Loop 3 — Agentic exploratory.** The discovery engine. Vision-capable agents
 drive the app through the same tools as Loop 1 (Maestro on mobile, Playwright
@@ -63,7 +61,7 @@ smoke subset.
 
 ## What exists vs. what we build
 
-The app tests already exist (Zack's team wrote them over months). We do not
+The app tests already exist (written over months by the development team). We do not
 re-author them. We build:
 
 1. The **coverage assessment** — map all existing tests against the 50+
@@ -82,7 +80,7 @@ re-author them. We build:
 - **Huberts-Mac-mini**: self-hosted GitHub Actions runner, online and idle,
   labels `self-hosted, macOS, ARM64`. Verified end-to-end 2026-10-02. Zero
   cloud Mac minutes. Target it with `runs-on: [self-hosted, macOS, ARM64]`.
-- **Tailscale**: this build agent's VM and the mini are on Hubert's tailnet.
+- **Tailscale**: this build agent's VM and the mini are on the tailnet.
   Direct SSH to the mini works (key-authenticated) for setup and debugging.
 - **MacBook Pro**: runner files staged; can become a second runner if wanted.
   Not needed now.
@@ -102,7 +100,7 @@ minutes for smoke, with manifests emitted.*
 
 **Phase 2 — Production verification.** Release-version manifests, async
 release triggers, the production-safe smoke subset, alert routing.
-*Outcome: every Zack release is smoke-verified without blocking him, and
+*Outcome: every release is smoke-verified without blocking it, and
 someone is notified of failures.*
 
 **Phase 3 — Exploratory loop.** Mission files (payments, auth/session edges,
@@ -118,7 +116,7 @@ mini-runner CI job, offline cadence.
 Compose-vs-mock decision).
 *Outcome: contract and E2E coverage between backend and clients.*
 
-## Open decisions (need Hubert)
+## Open decisions
 
 1. E2E backend target: ephemeral Docker Compose stack vs recorded-fixture
    mock server.
@@ -128,7 +126,7 @@ Compose-vs-mock decision).
 
 ## Risks
 
-- **Zack's velocity vs. harness speed.** Mitigated by version-aware reporting
+- **Release velocity vs. harness speed.** Mitigated by version-aware reporting
   and the 10-minute smoke target; accepted, not solved, by design.
 - **Flaky mobile tests.** Quarantine with owner/reason keeps the signal clean.
 - **Mini availability.** The runner needs the mini awake and on the network.
