@@ -11,9 +11,12 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 from threading import Thread
 import time
 from urllib.parse import urlparse
+
+import yaml
 
 from . import determinism as det
 from . import quarantine as quar
@@ -68,6 +71,93 @@ def _maestro_command(ref: str, env: dict, harness_dir: str = ".") -> list[str]:
     qa_flow = os.path.join(os.path.abspath(harness_dir), ref)
     flow = qa_flow if os.path.isfile(qa_flow) else ref
     return ["maestro", "test", *(["--device", device] if device else []), flow]
+
+
+def _qa_setup(test: dict, env: dict, mobile_dir: str) -> dict | None:
+    """Reuse the mobile repo's existing simulator QA handoff, loop 1 only."""
+    stage = test.get("qa_stage")
+    seed_group = test.get("qa_seed_meet_group", False)
+    if not stage and not seed_group:
+        return None
+    udid = env.get("SIMULATOR_UDID")
+    if not udid:
+        return {"command": "QA simulator setup", "status": "error",
+                "returncode": -1, "duration_s": 0,
+                "tail": "QA staging requires SIMULATOR_UDID"}
+    scripts = os.path.join(os.path.abspath(mobile_dir), "cartha_ai_mobile", "scripts")
+    if seed_group:
+        cmd = ["bash", os.path.join(scripts, "qa_seed_meet_group.sh"),
+               "--udid", udid,
+               "--user-email", "testuser1@yopmail.com",
+               "--user-email", "testuser2@yopmail.com",
+               "--user-email", "carthaomegle1@yopmail.com"]
+        timeout = 90
+    else:
+        cmd = [sys.executable, os.path.join(scripts, "qa_debug_api.py"),
+               "stage-qa-screen", "--udid", udid, "--screen", stage["screen"]]
+        if stage.get("data"):
+            cmd += ["--data-json", json.dumps(stage["data"], separators=(",", ":"))]
+        if stage.get("launch_app", True):
+            cmd.append("--launch-app")
+        timeout = 60
+    return _run(cmd, env, mobile_dir, timeout)
+
+
+def _without_qa_open_link(flow: str, destination: str,
+                          dismiss: list[str] | None = None) -> str:
+    """Use the already-staged QA screen, keeping upstream UI assertions intact.
+
+    The iOS simulator's custom-scheme openLink is unreliable: it can show an OS
+    confirmation or leave the app on its previous screen. The mobile repo's
+    stage-qa-screen helper is the established prompt-free path for this lane.
+    """
+    with open(flow) as source:
+        docs = list(yaml.safe_load_all(source))
+    if len(docs) != 2 or not isinstance(docs[1], list):
+        raise ValueError(f"expected a two-document Maestro flow: {flow}")
+    commands = [command for command in docs[1]
+                if not (isinstance(command, dict) and "openLink" in command)]
+    if len(docs[1]) - len(commands) != 1:
+        raise ValueError(f"expected exactly one QA openLink in {flow}")
+    for label in reversed(dismiss or []):
+        commands.insert(0, {"runFlow": {"when": {"visible": label},
+                                        "commands": [{"tapOn": label}]}})
+    with open(destination, "w") as prepared:
+        yaml.safe_dump(docs[0], prepared, sort_keys=False)
+        prepared.write("---\n")
+        yaml.safe_dump(commands, prepared, sort_keys=False)
+    return destination
+
+
+def _run_maestro(test: dict, ref: str, env: dict,
+                 mobile_dir: str, harness_dir: str) -> dict:
+    if test.get("qa_use_staged_screen") and not test.get("qa_stage"):
+        return {"command": "QA simulator setup", "status": "error",
+                "returncode": -1, "duration_s": 0,
+                "tail": "qa_use_staged_screen requires qa_stage"}
+    setup = _qa_setup(test, env, mobile_dir)
+    if setup is not None and setup.get("status") != "passed":
+        return {**setup, "status": "error",
+                "tail": f"QA setup failed: {setup.get('tail', '')}"}
+    try:
+        cmd = _maestro_command(ref, env, harness_dir)
+        result_dir = os.path.abspath(os.path.join(
+            "maestro-results", env.get("GITHUB_RUN_ID", "local"),
+            os.path.splitext(os.path.basename(ref))[0]))
+        os.makedirs(result_dir, exist_ok=True)
+        cmd[-1:-1] = ["--test-output-dir", result_dir]
+        with tempfile.TemporaryDirectory(prefix="cartha-maestro-") as temp_dir:
+            if test.get("qa_use_staged_screen") and env.get("SIMULATOR_UDID"):
+                flow = cmd[-1]
+                source = flow if os.path.isabs(flow) else os.path.join(mobile_dir, flow)
+                cmd[-1] = _without_qa_open_link(
+                    source, os.path.join(temp_dir, os.path.basename(flow)),
+                    test.get("qa_dismiss"))
+            return _run(cmd, env, mobile_dir, test.get("timeout_s", 600))
+    except (OSError, ValueError, yaml.YAMLError) as exc:
+        return {"command": f"prepare Maestro flow {ref}", "status": "error",
+                "returncode": -1, "duration_s": 0,
+                "tail": f"QA flow preparation failed: {exc}"}
 
 
 class _QuietStaticHandler(SimpleHTTPRequestHandler):
@@ -145,7 +235,7 @@ def cmd_run_smoke(args: argparse.Namespace) -> int:
     for t in runnable:
         kind, ref = t["id"].split(":", 1)
         if kind == "maestro":
-            cmd = _maestro_command(ref, env, args.backend_dir)
+            cmd = None
             cwd = args.mobile_dir
         elif kind == "playwright":
             cmd = None
@@ -165,7 +255,9 @@ def cmd_run_smoke(args: argparse.Namespace) -> int:
                             "tail": f"unknown test kind: {kind}"})
             continue
         print(f"run {t['id']} ...", flush=True)
-        if kind == "playwright":
+        if kind == "maestro":
+            r = _run_maestro(t, ref, env, cwd, args.backend_dir)
+        elif kind == "playwright":
             r = _run_browser(ref, env, cwd, t.get("timeout_s", 600))
         else:
             r = _run(cmd, env, cwd, t.get("timeout_s", 600))

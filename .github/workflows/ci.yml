@@ -103,5 +103,6 @@ jobs:
           path: |
             run-manifest.json
             smoke-report.json
+            maestro-results/${{ github.run_id }}/
             ${{ runner.temp }}/cartha-ios-build.log
             cartha.website/tmp/download-promo-qa/

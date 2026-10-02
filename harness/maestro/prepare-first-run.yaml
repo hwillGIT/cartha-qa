@@ -3,6 +3,14 @@
 appId: com.cartha.app
 ---
 - launchApp
+- repeat:
+    while:
+      visible: "Open in.*"
+    times: 4
+    commands:
+      - tapOn: "Open"
+      - waitForAnimationToEnd:
+          timeout: 3000
 - waitForAnimationToEnd:
     timeout: 15000
 - runFlow:
