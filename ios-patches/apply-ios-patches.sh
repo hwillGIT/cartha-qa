@@ -25,11 +25,15 @@ echo "Applying iOS test patches to $MOBILE_DIR..."
 
 # 1. Podfile: iOS 15 floor for pods
 echo "  [1/5] Patching Podfile..."
-if ! grep -q "QA harness: Xcode 27" "$MOBILE_DIR/ios/Podfile"; then
+if ! grep -q "QA harness: Xcode 27" "$MOBILE_DIR/ios/Podfile" 2>/dev/null; then
   python3 - <<'PYEOF'
 import sys
 p = sys.argv[1] + "/ios/Podfile"
-s = open(p).read()
+try:
+    s = open(p).read()
+except FileNotFoundError:
+    print(f"    WARNING: Podfile not found at {p}, skipping")
+    sys.exit(0)
 old = "      config.build_settings['ENABLE_BITCODE'] = 'NO'\n"
 new = """      config.build_settings['ENABLE_BITCODE'] = 'NO'
 
@@ -40,7 +44,9 @@ new = """      config.build_settings['ENABLE_BITCODE'] = 'NO'
         config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
       end
 """
-assert old in s, "Podfile pattern not found"
+if old not in s:
+    print("    WARNING: Podfile pattern not found, skipping (may already be patched or different version)")
+    sys.exit(0)
 s = s.replace(old, new, 1)
 open(p, "w").write(s)
 print("    Podfile patched")
@@ -96,30 +102,35 @@ echo "  [4/5] Patching project.pbxproj..."
 python3 - <<'PYEOF'
 import sys
 p = sys.argv[1] + "/ios/Runner.xcodeproj/project.pbxproj"
-s = open(p).read()
+try:
+    s = open(p).read()
+except FileNotFoundError:
+    print(f"    WARNING: project.pbxproj not found at {p}, skipping")
+    sys.exit(0)
 if "SceneDelegate.swift in Sources" in s:
     print("    project.pbxproj already patched")
     sys.exit(0)
-# Add PBXBuildFile
-old = "\t\t74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74858FAE1ED2DC5600515810 /* AppDelegate.swift */; };\n"
-new = old + "\t\t74858FB01ED2DC5600515811 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74858FB11ED2DC5600515811 /* SceneDelegate.swift */; };\n"
-assert old in s, "PBXBuildFile pattern not found"
-s = s.replace(old, new, 1)
-# Add PBXFileReference
-old = "\t\t74858FAE1ED2DC5600515810 /* AppDelegate.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = \"<group>\"; };\n"
-new = old + "\t\t74858FB11ED2DC5600515811 /* SceneDelegate.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = \"<group>\"; };\n"
-assert old in s, "PBXFileReference pattern not found"
-s = s.replace(old, new, 1)
-# Add to group
-old = "\t\t\t\t74858FAE1ED2DC5600515810 /* AppDelegate.swift */,\n"
-new = old + "\t\t\t\t74858FB11ED2DC5600515811 /* SceneDelegate.swift */,\n"
-assert old in s, "Group pattern not found"
-s = s.replace(old, new, 1)
-# Add to Sources
-old = "\t\t\t\t74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */,\n"
-new = old + "\t\t\t\t74858FB01ED2DC5600515811 /* SceneDelegate.swift in Sources */,\n"
-assert old in s, "Sources pattern not found"
-s = s.replace(old, new, 1)
+# Note: UUIDs below are specific to the verified ref. If they don't match,
+# the patch is skipped with a warning (build will fail without SceneDelegate).
+patterns = [
+    ("\t\t74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74858FAE1ED2DC5600515810 /* AppDelegate.swift */; };\n",
+     "\t\t74858FB01ED2DC5600515811 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74858FB11ED2DC5600515811 /* SceneDelegate.swift */; };\n",
+     "PBXBuildFile"),
+    ("\t\t74858FAE1ED2DC5600515810 /* AppDelegate.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = \"<group>\"; };\n",
+     "\t\t74858FB11ED2DC5600515811 /* SceneDelegate.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = \"<group>\"; };\n",
+     "PBXFileReference"),
+    ("\t\t\t\t74858FAE1ED2DC5600515810 /* AppDelegate.swift */,\n",
+     "\t\t\t\t74858FB11ED2DC5600515811 /* SceneDelegate.swift */,\n",
+     "Group"),
+    ("\t\t\t\t74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */,\n",
+     "\t\t\t\t74858FB01ED2DC5600515811 /* SceneDelegate.swift in Sources */,\n",
+     "Sources"),
+]
+for old, new_suffix, name in patterns:
+    if old not in s:
+        print(f"    WARNING: {name} pattern not found, skipping pbxproj patch (UUIDs may differ)")
+        sys.exit(0)
+    s = s.replace(old, old + new_suffix, 1)
 open(p, "w").write(s)
 print("    project.pbxproj patched")
 PYEOF

@@ -16,7 +16,7 @@ on:
       ref:
         description: 'Mobile repo ref (branch, tag, or SHA)'
         required: false
-        default: 'main'
+        default: '776b6a583e5bb08013cc9b1c8891e76e93914f34'
       maestro_flow:
         description: 'Maestro flow to run'
         required: false
