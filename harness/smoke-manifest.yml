@@ -1,0 +1,45 @@
+# Smoke manifest — the curated deterministic smoke tier.
+# Built from the Phase 0 coverage assessment, not from raw flow counts.
+# Loop 1 runs QA-staged (all 16 mobile flows). Loop 2 runs the production-safe
+# subset only: 4 flows are excluded (live room, real calls, real friend request).
+version: 1
+loop1:
+  description: Deterministic baseline smoke — QA-staged, seeded, non-blocking.
+  tests:
+    - {id: "maestro:cartha_ai_mobile/.maestro/flows/00_launch_and_screenshot.yaml", timeout_s: 180}
+    - {id: "maestro:cartha_ai_mobile/.maestro/flows/00_login.yaml", timeout_s: 300}
+    - {id: "maestro:cartha_ai_mobile/.maestro/flows/01_clips_feed.yaml", timeout_s: 300}
+    - {id: "maestro:cartha_ai_mobile/.maestro/flows/04_messages.yaml", timeout_s: 300}
+    - {id: "maestro:cartha_ai_mobile/.maestro/flows/30_hangouts_smoke.yaml", timeout_s: 300}
+    - {id: "maestro:cartha_ai_mobile/.maestro/flows/61_clips_core_smoke.yaml", timeout_s: 300}
+    - {id: "maestro:cartha_ai_mobile/.maestro/flows/62_profile_audio_call_smoke.yaml", timeout_s: 300}
+    - {id: "maestro:cartha_ai_mobile/.maestro/flows/63_public_profile_add_friend_smoke.yaml", timeout_s: 300}
+    - {id: "maestro:cartha_ai_mobile/.maestro/flows/64_profile_video_call_smoke.yaml", timeout_s: 300}
+    - {id: "maestro:cartha_ai_mobile/.maestro/flows/65_clips_create_entry_smoke.yaml", timeout_s: 300}
+    - {id: "maestro:cartha_ai_mobile/.maestro/flows/66_public_profile_clip_open_smoke.yaml", timeout_s: 300}
+    - {id: "maestro:cartha_ai_mobile/.maestro/flows/67_meet_group_chat_thread_smoke.yaml", timeout_s: 300}
+    - {id: "maestro:cartha_ai_mobile/.maestro/flows/179_messages_refactor_smoke.yaml", timeout_s: 300}
+    - {id: "maestro:cartha_ai_mobile/.maestro/flows/180_daily_moments_refactor_smoke.yaml", timeout_s: 300}
+    - {id: "maestro:cartha_ai_mobile/.maestro/flows/181_church_social_refactor_smoke.yaml", timeout_s: 300}
+    - {id: "maestro:cartha_ai_mobile/.maestro/flows/182_chat_home_refactor_smoke.yaml", timeout_s: 300}
+    - {id: "node:test:auth-session", timeout_s: 300}
+    - {id: "node:test:atlas-shell-navigation", timeout_s: 300}
+    - {id: "playwright:test/download-promo.browser.mjs", timeout_s: 300}
+loop2:
+  description: Production verification — test accounts, non-destructive only.
+  tests:
+    - {id: "maestro:cartha_ai_mobile/.maestro/flows/00_launch_and_screenshot.yaml", timeout_s: 180}
+    - {id: "maestro:cartha_ai_mobile/.maestro/flows/00_login.yaml", timeout_s: 300, test_account: true}
+    - {id: "maestro:cartha_ai_mobile/.maestro/flows/01_clips_feed.yaml", timeout_s: 300}
+    - {id: "maestro:cartha_ai_mobile/.maestro/flows/04_messages.yaml", timeout_s: 300, test_account: true}
+    - {id: "maestro:cartha_ai_mobile/.maestro/flows/61_clips_core_smoke.yaml", timeout_s: 300}
+    - {id: "maestro:cartha_ai_mobile/.maestro/flows/65_clips_create_entry_smoke.yaml", timeout_s: 300, test_account: true}
+    - {id: "maestro:cartha_ai_mobile/.maestro/flows/66_public_profile_clip_open_smoke.yaml", timeout_s: 300}
+    - {id: "maestro:cartha_ai_mobile/.maestro/flows/67_meet_group_chat_thread_smoke.yaml", timeout_s: 300, test_account: true}
+    - {id: "maestro:cartha_ai_mobile/.maestro/flows/179_messages_refactor_smoke.yaml", timeout_s: 300}
+    - {id: "maestro:cartha_ai_mobile/.maestro/flows/180_daily_moments_refactor_smoke.yaml", timeout_s: 300}
+    - {id: "maestro:cartha_ai_mobile/.maestro/flows/181_church_social_refactor_smoke.yaml", timeout_s: 300}
+    - {id: "maestro:cartha_ai_mobile/.maestro/flows/182_chat_home_refactor_smoke.yaml", timeout_s: 300}
+    - {id: "node:test:auth-session", timeout_s: 300}
+    - {id: "node:test:atlas-shell-navigation", timeout_s: 300}
+    - {id: "playwright:test/download-promo.browser.mjs", timeout_s: 300}
