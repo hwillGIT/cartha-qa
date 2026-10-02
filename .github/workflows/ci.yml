@@ -24,27 +24,27 @@ jobs:
     steps:
       - name: Check repo access token
         run: |
-          if [ -z "${{ secrets.CARTHA_REPOS_TOKEN }}" ]; then
-            echo "CARTHA_REPOS_TOKEN is not set."
+          if [ -z "${{ secrets.CARTHA_REPO_SECRET }}" ]; then
+            echo "CARTHA_REPO_SECRET is not set."
             echo "Create a fine-grained PAT with read access to zackseyun/cartha.ai.mobile,"
             echo "zackseyun/cartha.website, zackseyun/CarthaCdkService, and add it as a"
-            echo "repository secret named CARTHA_REPOS_TOKEN on hwillGIT/cartha-qa."
+            echo "repository secret named CARTHA_REPO_SECRET on hwillGIT/cartha-qa."
             exit 1
           fi
       - uses: actions/checkout@v4
         with:
           path: cartha-qa
-      # App repos are private; CARTHA_REPOS_TOKEN is a fine-grained PAT with
+      # App repos are private; CARTHA_REPO_SECRET is a fine-grained PAT with
       # read access to zackseyun/cartha.ai.mobile, cartha.website, CarthaCdkService.
       - uses: actions/checkout@v4
         with:
           repository: zackseyun/cartha.ai.mobile
-          token: ${{ secrets.CARTHA_REPOS_TOKEN }}
+          token: ${{ secrets.CARTHA_REPO_SECRET }}
           path: cartha.ai.mobile
       - uses: actions/checkout@v4
         with:
           repository: zackseyun/cartha.website
-          token: ${{ secrets.CARTHA_REPOS_TOKEN }}
+          token: ${{ secrets.CARTHA_REPO_SECRET }}
           path: cartha.website
       - name: Install harness CLI
         run: pip install ./cartha-qa/harness
