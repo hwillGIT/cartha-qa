@@ -1,0 +1,4 @@
+# Quarantine — flaky tests, visible and owned. Never silent.
+# A test lands here with a reason, an owner, and a date. It is skipped in runs
+# but always listed in reports as quarantined-skipped.
+quarantined: []
