@@ -22,7 +22,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install harness CLI
-        run: pip install ./harness
+        run: |
+          python3 -m venv "$RUNNER_TEMP/harness-venv"
+          "$RUNNER_TEMP/harness-venv/bin/pip" install --quiet --upgrade pip
+          "$RUNNER_TEMP/harness-venv/bin/pip" install ./harness
+          echo "$RUNNER_TEMP/harness-venv/bin" >> "$GITHUB_PATH"
       - name: Verify production
         run: |
           harness verify-prod \
