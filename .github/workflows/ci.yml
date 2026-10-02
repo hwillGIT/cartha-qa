@@ -55,7 +55,8 @@ jobs:
       - name: Add toolchain to PATH
         run: |
           # mini uses ~/dev, macbook uses ~/toolchain (+ brew for node/go)
-          for d in "$HOME/dev/flutter/bin" "$HOME/toolchain/flutter/bin" \
+          for d in "$HOME/.cargo/bin" \
+                   "$HOME/dev/flutter/bin" "$HOME/toolchain/flutter/bin" \
                    "$HOME/dev/node/bin" "$HOME/toolchain/node/bin" \
                    "$HOME/.maestro/bin" \
                    "$HOME/dev/go/bin" "$HOME/toolchain/go/bin" \

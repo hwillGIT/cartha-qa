@@ -43,7 +43,7 @@ jobs:
           token: ${{ secrets.CARTHA_REPO_SECRET }}
       - name: Set up toolchain PATH
         run: |
-          for d in /opt/homebrew/bin "$HOME/.maestro/bin" \
+          for d in /opt/homebrew/bin "$HOME/.cargo/bin" "$HOME/.maestro/bin" \
                    "$HOME/dev/flutter/bin" "$HOME/toolchain/flutter/bin" \
                    "$HOME/dev/java/Contents/Home/bin" "$HOME/toolchain/java/Contents/Home/bin"; do
             [ ! -d "$d" ] || echo "$d" >> "$GITHUB_PATH"

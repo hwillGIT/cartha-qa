@@ -15,6 +15,11 @@ fi
 xcode_version="$(xcodebuild -version | awk '/^Xcode / { print $2 }')"
 xcode_major="${xcode_version%%.*}"
 echo "Building with Xcode $xcode_version"
+if ! command -v rustc >/dev/null || ! command -v rustup >/dev/null; then
+  echo "Rust toolchain missing from PATH (expected rustc and rustup)" >&2
+  exit 1
+fi
+rustc --version
 
 if [ "$xcode_major" -ge 27 ]; then
   "$script_dir/apply-ios-patches.sh" "$app_dir"
