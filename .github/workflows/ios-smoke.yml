@@ -1,0 +1,115 @@
+name: iOS Smoke Test
+
+# Runs the Cartha iOS smoke test on the Mac mini self-hosted runner.
+# Applies test-only iOS patches (scene lifecycle for iOS 27 SDK), builds the
+# app, installs on simulator, and runs the Maestro launch flow.
+#
+# Required secrets:
+#   CARTHA_REPO_SECRET: GitHub PAT with read access to zackseyun/cartha.ai.mobile
+#
+# The patches in ios-patches/ are test-only and must not be committed to
+# zackseyun/cartha.ai.mobile.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Mobile repo ref (branch, tag, or SHA)'
+        required: false
+        default: 'main'
+      maestro_flow:
+        description: 'Maestro flow to run'
+        required: false
+        default: 'cartha_ai_mobile/.maestro/flows/00_launch_and_screenshot.yaml'
+  push:
+    branches: [main]
+    paths:
+      - 'ios-patches/**'
+      - '.github/workflows/ios-smoke.yml'
+
+jobs:
+  ios-smoke:
+    runs-on: [self-hosted, macOS, ARM64]
+    # Pin to Mac mini for iOS builds (has Xcode 27, iOS 27 simulator)
+    # TODO: Add runner name constraint once verified
+    
+    env:
+      SIMULATOR_UDID: 56CFEE56-2C47-4D93-BD95-E5E11FC6251C
+      APP_BUNDLE_ID: com.cartha.app
+    
+    steps:
+      - name: Check out harness
+        uses: actions/checkout@v4
+      
+      - name: Check out mobile repo
+        uses: actions/checkout@v4
+        with:
+          repository: zackseyun/cartha.ai.mobile
+          ref: ${{ inputs.ref || 'main' }}
+          path: cartha.ai.mobile
+          token: ${{ secrets.CARTHA_REPO_SECRET }}
+      
+      - name: Set up toolchain PATH
+        run: |
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+          echo "/opt/homebrew/bin" >> $GITHUB_PATH
+          echo "$HOME/dev/flutter/bin" >> $GITHUB_PATH
+          echo "$HOME/dev/java/Contents/Home/bin" >> $GITHUB_PATH
+          echo "$HOME/.maestro/bin" >> $GITHUB_PATH
+      
+      - name: Verify mobile ref
+        run: |
+          cd cartha.ai.mobile
+          echo "Testing ref: $(git rev-parse HEAD)"
+          echo "Branch: $(git rev-parse --abbrev-ref HEAD)"
+          git log -1 --oneline
+      
+      - name: Apply iOS test patches
+        run: |
+          ./ios-patches/apply-ios-patches.sh "$GITHUB_WORKSPACE/cartha.ai.mobile/cartha_ai_mobile"
+      
+      - name: Get Flutter dependencies
+        run: |
+          cd cartha.ai.mobile/cartha_ai_mobile
+          flutter pub get
+      
+      - name: Patch flutter_contacts for scenes
+        run: |
+          ./ios-patches/patch-flutter-contacts.sh
+      
+      - name: Build iOS simulator app
+        run: |
+          cd cartha.ai.mobile/cartha_ai_mobile
+          # Stage Cloud projects aside (multi-project build workaround)
+          mkdir -p build/ios_cloud_project_stage
+          mv ios/*Cloud.xcodeproj build/ios_cloud_project_stage/ 2>/dev/null || true
+          flutter build ios --simulator
+          # Restore Cloud projects
+          mv build/ios_cloud_project_stage/*Cloud.xcodeproj ios/ 2>/dev/null || true
+          echo "Build complete: $(ls -lh build/ios/iphonesimulator/Runner.app | awk '{print $5}')"
+      
+      - name: Strip app extensions and install
+        run: |
+          # App extensions cause "Invalid placeholder attributes" on simulator
+          rm -rf /tmp/RunnerNoExt.app
+          cp -R cartha.ai.mobile/cartha_ai_mobile/build/ios/iphonesimulator/Runner.app /tmp/RunnerNoExt.app
+          rm -rf /tmp/RunnerNoExt.app/PlugIns
+          xcrun simctl install "$SIMULATOR_UDID" /tmp/RunnerNoExt.app
+          echo "Installed (extensions stripped)"
+      
+      - name: Boot simulator
+        run: |
+          xcrun simctl boot "$SIMULATOR_UDID" 2>/dev/null || echo "Simulator already booted"
+      
+      - name: Run Maestro flow
+        run: |
+          cd cartha.ai.mobile/cartha_ai_mobile
+          maestro test --device "$SIMULATOR_UDID" "${{ inputs.maestro_flow || 'cartha_ai_mobile/.maestro/flows/00_launch_and_screenshot.yaml' }}"
+      
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maestro-screenshots
+          path: ~/.maestro/tests/
+          retention-days: 7
