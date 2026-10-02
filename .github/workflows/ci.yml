@@ -48,10 +48,20 @@ jobs:
           path: cartha.website
       - name: Add toolchain to PATH
         run: |
-          for d in "$HOME/dev/flutter/bin" "$HOME/dev/node/bin" "$HOME/.maestro/bin" "$HOME/dev/go/bin" "$HOME/dev/java/Contents/Home/bin"; do
-            echo "$d" >> "$GITHUB_PATH"
+          # mini uses ~/dev, macbook uses ~/toolchain (+ brew for node/go)
+          for d in "$HOME/dev/flutter/bin" "$HOME/toolchain/flutter/bin" \
+                   "$HOME/dev/node/bin" "$HOME/toolchain/node/bin" \
+                   "$HOME/.maestro/bin" \
+                   "$HOME/dev/go/bin" "$HOME/toolchain/go/bin" \
+                   "$HOME/dev/java/Contents/Home/bin" "$HOME/toolchain/java/Contents/Home/bin" \
+                   /opt/homebrew/bin; do
+            [ -d "$d" ] && echo "$d" >> "$GITHUB_PATH"
           done
-          echo "JAVA_HOME=$HOME/dev/java/Contents/Home" >> "$GITHUB_ENV"
+          if [ -d "$HOME/dev/java/Contents/Home" ]; then
+            echo "JAVA_HOME=$HOME/dev/java/Contents/Home" >> "$GITHUB_ENV"
+          else
+            echo "JAVA_HOME=$HOME/toolchain/java/Contents/Home" >> "$GITHUB_ENV"
+          fi
       - name: Install harness CLI
         run: |
           python3 -m venv "$RUNNER_TEMP/harness-venv"
