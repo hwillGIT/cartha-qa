@@ -29,9 +29,8 @@ on:
 
 jobs:
   ios-smoke:
-    # Must run on Mac mini (has Xcode 27, iOS 27 simulator). The MacBook
-    # shares the macOS/ARM64 labels but cannot build iOS.
-    runs-on: [self-hosted, macOS, ARM64, Huberts-Mac-mini]
+    # Target Mac mini by name (has Xcode 27, iOS 27 simulator)
+    runs-on: Huberts-Mac-mini
     
     env:
       SIMULATOR_UDID: 56CFEE56-2C47-4D93-BD95-E5E11FC6251C
