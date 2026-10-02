@@ -1,8 +1,9 @@
 # Cartha Test Harness
 
 The harness verifies Cartha's mobile, web, and desktop apps **without blocking
-releases**. Zack ships when he is ready. The harness checks what shipped, warns
-about defects before users find them, and grows smarter with every validated bug.
+releases**. Development ships when it is ready — the harness checks what
+shipped, warns about defects before users find them, and grows smarter with
+every validated bug.
 
 ![CI/CD pipeline](cicd-pipeline.png)
 
@@ -15,7 +16,7 @@ without a recorded decision.
 
 **Loop 2 — Production verification.** Runs after each release, asynchronously.
 A fast smoke suite against the live build, using test accounts and strictly
-non-destructive steps. If Zack outruns the harness, every report names the
+non-destructive steps. If releases outpace the harness, every report names the
 exact build it verified.
 
 **Loop 3 — Agentic exploratory.** LangChain agents probe the app with
