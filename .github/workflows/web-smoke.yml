@@ -55,6 +55,7 @@ jobs:
       - name: Set up Node
         if: steps.check.outputs.is_macbook == 'true'
         run: |
+          export PATH="/opt/homebrew/bin:$PATH"
           echo "/opt/homebrew/bin" >> $GITHUB_PATH
           node --version
           npm --version
