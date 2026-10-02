@@ -5,11 +5,15 @@ Thin YAML workflows call these commands; all behavior lives here.
 from __future__ import annotations
 
 import argparse
+from functools import partial
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
 import subprocess
 import sys
+from threading import Thread
 import time
+from urllib.parse import urlparse
 
 from . import determinism as det
 from . import quarantine as quar
@@ -57,11 +61,63 @@ def _base_env(master_seed: str, clock: str | None) -> dict:
     return env
 
 
+def _maestro_command(ref: str, env: dict) -> list[str]:
+    device = env.get("SIMULATOR_UDID")
+    return ["maestro", "test", *(["--device", device] if device else []), ref]
+
+
+class _QuietStaticHandler(SimpleHTTPRequestHandler):
+    def log_message(self, format: str, *args: object) -> None:
+        pass
+
+
+def _run_browser(ref: str, env: dict, web_dir: str, timeout: int) -> dict:
+    """Run the website's node:test browser suite against an explicit URL.
+
+    Loop 1 serves the checked-out static promo locally. Loop 2 must be given
+    an HTTPS production URL; it must never silently skip the browser test.
+    """
+    browser_env = env.copy()
+    if env.get("HARNESS_PROD") == "1":
+        url = env.get("DOWNLOAD_PROMO_URL", "")
+        if urlparse(url).scheme != "https":
+            return {"command": f"node --test {ref}", "status": "error",
+                    "returncode": -1, "duration_s": 0,
+                    "tail": "DOWNLOAD_PROMO_URL must be an HTTPS production URL"}
+        return _run(["node", "--test", ref], browser_env, web_dir, timeout)
+
+    static_dir = os.path.join(os.path.abspath(web_dir), "redirects")
+    if not os.path.isfile(os.path.join(static_dir, "index.html")):
+        return {"command": f"node --test {ref}", "status": "error",
+                "returncode": -1, "duration_s": 0,
+                "tail": f"static promo missing: {static_dir}/index.html"}
+    handler = partial(_QuietStaticHandler, directory=static_dir)
+    with ThreadingHTTPServer(("127.0.0.1", 0), handler) as server:
+        port = server.server_address[1]
+        browser_env["DOWNLOAD_PROMO_URL"] = f"http://127.0.0.1:{port}"
+        thread = Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            return _run(["node", "--test", ref], browser_env, web_dir, timeout)
+        finally:
+            server.shutdown()
+            thread.join()
+
+
 def cmd_run_smoke(args: argparse.Namespace) -> int:
     manifest = smoke.load_manifest(args.manifest)
     tests = smoke.select_tests(
         manifest, "loop1", args.shard_index, args.shard_total
     )
+    if args.kinds:
+        kinds = set(args.kinds.split(","))
+        unknown = kinds - {"maestro", "playwright", "node", "flutter", "go"}
+        if unknown:
+            raise ValueError(f"unknown test kinds: {sorted(unknown)}")
+        tests = [t for t in tests if t["id"].split(":", 1)[0] in kinds]
+    if not tests:
+        print("no tests selected; refusing to report a passing smoke run", file=sys.stderr)
+        return 2
     quarantined = quar.load_quarantine(args.quarantine)
     runnable, skipped = quar.partition(tests, quarantined)
 
@@ -74,7 +130,7 @@ def cmd_run_smoke(args: argparse.Namespace) -> int:
             "mobile": det.git_sha(args.mobile_dir),
             "web": det.git_sha(args.web_dir),
             "backend": det.git_sha(args.backend_dir),
-            "harness": det.git_sha(os.getcwd()),
+            "harness": det.git_sha(args.backend_dir),
         },
     )
     det.write_manifest(run_manifest, args.out_manifest)
@@ -85,10 +141,10 @@ def cmd_run_smoke(args: argparse.Namespace) -> int:
     for t in runnable:
         kind, ref = t["id"].split(":", 1)
         if kind == "maestro":
-            cmd = ["maestro", "test", ref]
+            cmd = _maestro_command(ref, env)
             cwd = args.mobile_dir
         elif kind == "playwright":
-            cmd = ["npx", "playwright", "test", ref]
+            cmd = None
             cwd = args.web_dir
         elif kind == "node":
             cmd = ["npm", "run", ref]
@@ -105,7 +161,10 @@ def cmd_run_smoke(args: argparse.Namespace) -> int:
                             "tail": f"unknown test kind: {kind}"})
             continue
         print(f"run {t['id']} ...", flush=True)
-        r = _run(cmd, env, cwd, t.get("timeout_s", 600))
+        if kind == "playwright":
+            r = _run_browser(ref, env, cwd, t.get("timeout_s", 600))
+        else:
+            r = _run(cmd, env, cwd, t.get("timeout_s", 600))
         r["id"] = t["id"]
         results.append(r)
         print(f"  {r['status']} ({r['duration_s']}s)")
@@ -147,11 +206,14 @@ def cmd_verify_prod(args: argparse.Namespace) -> int:
     for t in tests:
         kind, ref = t["id"].split(":", 1)
         cwd = args.mobile_dir if kind in ("maestro", "flutter") else args.web_dir
-        cmd = {"maestro": ["maestro", "test", ref],
-               "playwright": ["npx", "playwright", "test", ref],
+        cmd = {"maestro": _maestro_command(ref, env),
+               "playwright": ["node", "--test", ref],
                "node": ["npm", "run", ref]}[kind]
         print(f"run {t['id']} ...", flush=True)
-        r = _run(cmd, env, cwd, t.get("timeout_s", 300))
+        if kind == "playwright":
+            r = _run_browser(ref, env, cwd, t.get("timeout_s", 300))
+        else:
+            r = _run(cmd, env, cwd, t.get("timeout_s", 300))
         r["id"] = t["id"]
         results.append(r)
         print(f"  {r['status']} ({r['duration_s']}s)")
@@ -199,6 +261,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--backend-dir", default=".")
     s.add_argument("--shard-index", type=int, default=0)
     s.add_argument("--shard-total", type=int, default=1)
+    s.add_argument("--kinds", default="", help="Comma-separated test kinds to run")
     s.add_argument("--out-manifest", default="run-manifest.json")
     s.add_argument("--out-report", default="smoke-report.json")
     s.set_defaults(func=cmd_run_smoke)

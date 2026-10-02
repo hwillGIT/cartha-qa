@@ -20,8 +20,8 @@ on:
 
 jobs:
   web-smoke:
-    # Target MacBook by name (has Playwright Chromium verified)
-    runs-on: Huberts-MacBook
+    runs-on: [self-hosted, macOS, ARM64, macbook-qa]
+    timeout-minutes: 45
     
     steps:
       - name: Check out harness
@@ -37,7 +37,8 @@ jobs:
       
       - name: Set up Node
         run: |
-          echo "/opt/homebrew/bin" >> $GITHUB_PATH
+          export PATH="/opt/homebrew/bin:$PATH"
+          echo "/opt/homebrew/bin" >> "$GITHUB_PATH"
           node --version
           npm --version
       
@@ -45,32 +46,43 @@ jobs:
         run: |
           cd cartha.website
           npm ci
+          npm install --no-save --package-lock=false playwright@1.63.0
       
-      - name: Verify Playwright Chromium
+      - name: Verify Chrome browser automation
         run: |
           cd cartha.website
-          npx playwright install chromium --dry-run 2>&1 | head -5 || true
-          # Chromium should already be installed; verify it launches
           node -e "
             const { chromium } = require('playwright');
             (async () => {
-              const b = await chromium.launch({ headless: true });
-              console.log('Chromium OK');
+              const b = await chromium.launch({ headless: true, channel: 'chrome' });
+              console.log('Chrome OK');
               await b.close();
             })();
           "
-      
+      - name: Install harness CLI
+        run: |
+          python3 -m venv "$RUNNER_TEMP/harness-venv"
+          "$RUNNER_TEMP/harness-venv/bin/pip" install --quiet ./harness
+          echo "$RUNNER_TEMP/harness-venv/bin" >> "$GITHUB_PATH"
       - name: Run web smoke tests
         run: |
-          cd cartha.website
-          # Run the smoke-tier Playwright tests from the manifest
-          # TODO: Integrate with harness/smoke-manifest.yml for full list
-          npx playwright test --list 2>&1 | head -20
-      
+          harness run-smoke \
+            --seed "web-${{ github.run_id }}" \
+            --manifest harness/smoke-manifest.yml \
+            --quarantine harness/quarantine.yml \
+            --kinds node,playwright \
+            --mobile-dir cartha.ai.mobile \
+            --web-dir cartha.website \
+            --backend-dir . \
+            --out-manifest web-run-manifest.json \
+            --out-report web-smoke-report.json
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-results
-          path: cartha.website/playwright-report/
+          name: web-smoke-${{ github.run_id }}
+          path: |
+            web-run-manifest.json
+            web-smoke-report.json
+            cartha.website/tmp/download-promo-qa/
           retention-days: 7

@@ -23,8 +23,8 @@ env:
 
 jobs:
   smoke:
-    runs-on: [self-hosted, macOS, ARM64]  # mobile needs the Mac runner
-    timeout-minutes: 60
+    runs-on: [self-hosted, macOS, ARM64, macbook-qa]
+    timeout-minutes: 120
     steps:
       - name: Check repo access token
         run: |
@@ -74,6 +74,13 @@ jobs:
           "$RUNNER_TEMP/harness-venv/bin/pip" install --quiet --upgrade pip
           "$RUNNER_TEMP/harness-venv/bin/pip" install ./cartha-qa/harness
           echo "$RUNNER_TEMP/harness-venv/bin" >> "$GITHUB_PATH"
+      - name: Install web dependencies and browser driver
+        run: |
+          cd cartha.website
+          npm ci
+          npm install --no-save --package-lock=false playwright@1.63.0
+      - name: Build and install iOS simulator app
+        run: ./cartha-qa/ios-patches/build-and-install-simulator.sh "$GITHUB_WORKSPACE/cartha.ai.mobile/cartha_ai_mobile"
       - name: Run deterministic smoke
         run: |
           harness run-smoke \
@@ -93,3 +100,5 @@ jobs:
           path: |
             run-manifest.json
             smoke-report.json
+            ${{ runner.temp }}/cartha-ios-build.log
+            cartha.website/tmp/download-promo-qa/

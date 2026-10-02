@@ -2,7 +2,7 @@ import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from harness import determinism as det
-from harness import smoke, quarantine
+from harness import smoke, quarantine, cli
 
 
 def test_derive_seed_stable():
@@ -69,3 +69,37 @@ def test_quarantine_partition():
     assert [t["id"] for t in runnable] == ["a"]
     assert skipped[0]["id"] == "b"
     assert skipped[0]["quarantine"]["reason"] == "flaky"
+
+
+def test_maestro_uses_prepared_simulator():
+    assert cli._maestro_command("flow.yaml", {"SIMULATOR_UDID": "device-123"}) == [
+        "maestro", "test", "--device", "device-123", "flow.yaml"
+    ]
+
+
+def test_browser_smoke_serves_checked_out_promo(tmp_path, monkeypatch):
+    import urllib.request
+    promo = tmp_path / "redirects"
+    promo.mkdir()
+    (promo / "index.html").write_text("<h1>checked-out promo</h1>")
+    seen = {}
+
+    def fake_run(cmd, env, cwd, timeout):
+        seen["cmd"] = cmd
+        seen["url"] = env["DOWNLOAD_PROMO_URL"]
+        with urllib.request.urlopen(seen["url"]) as response:
+            assert b"checked-out promo" in response.read()
+        return {"status": "passed"}
+
+    monkeypatch.setattr(cli, "_run", fake_run)
+    result = cli._run_browser("test/download-promo.browser.mjs", {}, str(tmp_path), 30)
+    assert result["status"] == "passed"
+    assert seen["cmd"] == ["node", "--test", "test/download-promo.browser.mjs"]
+    assert seen["url"].startswith("http://127.0.0.1:")
+
+
+def test_production_browser_requires_explicit_https_url(tmp_path):
+    result = cli._run_browser("test/download-promo.browser.mjs",
+                              {"HARNESS_PROD": "1"}, str(tmp_path), 30)
+    assert result["status"] == "error"
+    assert "DOWNLOAD_PROMO_URL" in result["tail"]
