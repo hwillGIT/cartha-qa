@@ -20,8 +20,9 @@ on:
 
 jobs:
   web-smoke:
-    runs-on: [self-hosted, macOS, ARM64]
-    # Pin to MacBook for web tests (has Playwright Chromium verified)
+    # Must run on MacBook (has Playwright Chromium verified). The Mac mini
+    # shares the macOS/ARM64 labels but is reserved for iOS builds.
+    runs-on: [self-hosted, macOS, ARM64, Huberts-MacBook]
     
     steps:
       - name: Check out harness
