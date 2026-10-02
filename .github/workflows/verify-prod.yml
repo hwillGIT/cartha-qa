@@ -1,0 +1,39 @@
+# Thin CI: Loop 2 — production verification. Async, non-blocking, version-aware.
+# Triggered by releases or manually. Never gates a release.
+name: Production verification
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Released app version under test"
+        required: true
+      platform:
+        description: "Target platform"
+        required: false
+        default: "production"
+
+jobs:
+  verify:
+    runs-on: [self-hosted, macOS, ARM64]
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install harness CLI
+        run: pip install ./harness
+      - name: Verify production
+        run: |
+          harness verify-prod \
+            --seed "prod-${{ github.run_id }}" \
+            --version "${{ github.event.inputs.version || github.event.release.tag_name }}" \
+            --platform "${{ github.event.inputs.platform || 'production' }}" \
+            --manifest harness/smoke-manifest.yml \
+            --out-manifest prod-manifest.json
+      - name: Upload manifest
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: prod-verify-${{ github.run_id }}
+          path: prod-manifest.json
