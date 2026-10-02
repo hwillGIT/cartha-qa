@@ -26,7 +26,7 @@ echo "Applying iOS test patches to $MOBILE_DIR..."
 # 1. Podfile: iOS 15 floor for pods
 echo "  [1/5] Patching Podfile..."
 if ! grep -q "QA harness: Xcode 27" "$MOBILE_DIR/ios/Podfile" 2>/dev/null; then
-  python3 - <<'PYEOF'
+  python3 - "$MOBILE_DIR" <<'PYEOF'
 import sys
 p = sys.argv[1] + "/ios/Podfile"
 try:
@@ -51,14 +51,13 @@ s = s.replace(old, new, 1)
 open(p, "w").write(s)
 print("    Podfile patched")
 PYEOF
-  "$MOBILE_DIR"
 else
   echo "    Podfile already patched"
 fi
 
 # 2. Info.plist: scene manifest + remove UIMainStoryboardFile
 echo "  [2/5] Patching Info.plist..."
-python3 - <<'PYEOF'
+python3 - "$MOBILE_DIR" <<'PYEOF'
 import sys, plistlib
 p = sys.argv[1] + "/ios/Runner/Info.plist"
 with open(p, "rb") as f:
@@ -90,7 +89,6 @@ with open(p, "wb") as f:
 if not changed:
     print("    Info.plist already patched")
 PYEOF
-  "$MOBILE_DIR"
 
 # 3. SceneDelegate.swift: copy new file
 echo "  [3/5] Installing SceneDelegate.swift..."
@@ -99,7 +97,7 @@ echo "    SceneDelegate.swift installed"
 
 # 4. project.pbxproj: register SceneDelegate.swift
 echo "  [4/5] Patching project.pbxproj..."
-python3 - <<'PYEOF'
+python3 - "$MOBILE_DIR" <<'PYEOF'
 import sys
 p = sys.argv[1] + "/ios/Runner.xcodeproj/project.pbxproj"
 try:
@@ -134,11 +132,10 @@ for old, new_suffix, name in patterns:
 open(p, "w").write(s)
 print("    project.pbxproj patched")
 PYEOF
-  "$MOBILE_DIR"
 
 # 5. AppDelegate.swift: move plugin registration to SceneDelegate
 echo "  [5/5] Patching AppDelegate.swift..."
-python3 - <<'PYEOF'
+python3 - "$MOBILE_DIR" <<'PYEOF'
 import sys
 p = sys.argv[1] + "/ios/Runner/AppDelegate.swift"
 lines = open(p).read().split("\n")
@@ -152,7 +149,6 @@ else:
     sys.exit(0)
 open(p, "w").write("\n".join(lines))
 PYEOF
-  "$MOBILE_DIR"
 
 echo "All iOS patches applied."
 echo ""
