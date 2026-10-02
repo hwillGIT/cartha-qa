@@ -48,9 +48,10 @@ jobs:
           path: cartha.website
       - name: Install harness CLI
         run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install ./cartha-qa/harness
-          echo "$(python3 -c 'import site; print(site.USER_BASE)')/bin" >> "$GITHUB_PATH"
+          python3 -m venv "$RUNNER_TEMP/harness-venv"
+          "$RUNNER_TEMP/harness-venv/bin/pip" install --quiet --upgrade pip
+          "$RUNNER_TEMP/harness-venv/bin/pip" install ./cartha-qa/harness
+          echo "$RUNNER_TEMP/harness-venv/bin" >> "$GITHUB_PATH"
       - name: Run deterministic smoke
         run: |
           harness run-smoke \
