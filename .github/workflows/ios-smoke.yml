@@ -101,12 +101,24 @@ jobs:
         if: steps.check.outputs.is_mini == 'true'
         run: |
           cd cartha.ai.mobile/cartha_ai_mobile
+          # Verify patches were applied
+          echo "=== Patch verification ==="
+          grep -q "QA harness: Xcode 27" ios/Podfile && echo "Podfile: PATCHED" || echo "Podfile: NOT PATCHED"
+          grep -q "UIApplicationSceneManifest" ios/Runner/Info.plist && echo "Info.plist: PATCHED" || echo "Info.plist: NOT PATCHED"
+          [ -f ios/Runner/SceneDelegate.swift ] && echo "SceneDelegate.swift: EXISTS" || echo "SceneDelegate.swift: MISSING"
+          grep -q "SceneDelegate.swift in Sources" ios/Runner.xcodeproj/project.pbxproj && echo "pbxproj: PATCHED" || echo "pbxproj: NOT PATCHED"
+          echo "=== Starting build ==="
           # Stage Cloud projects aside (multi-project build workaround)
           mkdir -p build/ios_cloud_project_stage
           mv ios/*Cloud.xcodeproj build/ios_cloud_project_stage/ 2>/dev/null || true
-          flutter build ios --simulator
+          flutter build ios --simulator 2>&1 | tail -50
+          BUILD_STATUS=${PIPESTATUS[0]}
           # Restore Cloud projects
           mv build/ios_cloud_project_stage/*Cloud.xcodeproj ios/ 2>/dev/null || true
+          if [ $BUILD_STATUS -ne 0 ]; then
+            echo "Build FAILED with status $BUILD_STATUS"
+            exit 1
+          fi
           echo "Build complete: $(ls -lh build/ios/iphonesimulator/Runner.app | awk '{print $5}')"
       
       - name: Strip app extensions and install
