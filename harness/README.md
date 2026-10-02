@@ -52,10 +52,10 @@ replayed exactly.
 
 | Workflow | Trigger | Runner |
 |---|---|---|
-| `ci.yml` | push, PR, nightly | `ubuntu-latest` |
-| `verify-prod.yml` | release published | `ubuntu-latest` |
-| `explore.yml` | schedule, manual | `ubuntu-latest` |
-| desktop E2E | push, nightly | `Huberts-Mac-mini` (self-hosted, ARM64) |
+| `ci.yml` | push to main, nightly, manual | self-hosted macOS ARM64 |
+| `verify-prod.yml` | release published, manual | self-hosted macOS ARM64 |
+| `explore.yml` | Phase 3 | — |
+| desktop E2E | Phase 4 | self-hosted macOS ARM64 |
 
 The mini runner costs nothing and needs no cloud Mac minutes. Target it with
 `runs-on: [self-hosted, macOS, ARM64]`.
@@ -68,12 +68,19 @@ harness/
   STRATEGY.md          # full strategy and phased plan
   cicd-pipeline.png    # architecture diagram
   cicd-pipeline.svg
-  <python package>     # the harness CLI (Phase 1)
+  pyproject.toml       # pip-installable CLI package
+  src/harness/         # CLI source: seed, sharding, manifests, quarantine
+  tests/               # package tests
   smoke-manifest.yml   # curated smoke tier (from coverage assessment)
-  missions/            # exploratory mission definitions
+  quarantine.yml       # visible flake quarantine
+  DETERMINISM.md       # the determinism contract
+  run-manifest-schema.json
+  missions/            # exploratory mission definitions (Phase 3)
 ```
 
 ## Status
 
-Phase 0 (coverage assessment) is next. See [STRATEGY.md](STRATEGY.md) for the
-full phased plan and open decisions.
+Phase 0 (coverage assessment) and Phase 1 (Python CLI, determinism contract,
+smoke manifests, thin CI) are done. Phase 2 (production verification wiring) is
+next. See [STRATEGY.md](STRATEGY.md) for the full phased plan and
+[PROGRESS.md](PROGRESS.md) for live status.
