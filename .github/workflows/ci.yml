@@ -1,0 +1,60 @@
+# Thin CI: Loop 1 — deterministic baseline smoke. All logic lives in the
+# harness CLI; this file only declares what runs, when, and on which runner.
+name: Deterministic smoke
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 6 * * *"  # nightly, UTC
+  workflow_dispatch:
+    inputs:
+      seed:
+        description: "Master seed (default: run date)"
+        required: false
+        default: ""
+
+env:
+  HARNESS_SEED: ${{ github.event.inputs.seed || format('{0}-nightly', github.run_id) }}
+
+jobs:
+  smoke:
+    runs-on: [self-hosted, macOS, ARM64]  # mobile needs the Mac runner
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: cartha-qa
+      # App repos are private; CARTHA_REPOS_TOKEN is a fine-grained PAT with
+      # read access to zackseyun/cartha.ai.mobile, cartha.website, CarthaCdkService.
+      - uses: actions/checkout@v4
+        with:
+          repository: zackseyun/cartha.ai.mobile
+          token: ${{ secrets.CARTHA_REPOS_TOKEN }}
+          path: cartha.ai.mobile
+      - uses: actions/checkout@v4
+        with:
+          repository: zackseyun/cartha.website
+          token: ${{ secrets.CARTHA_REPOS_TOKEN }}
+          path: cartha.website
+      - name: Install harness CLI
+        run: pip install ./cartha-qa/harness
+      - name: Run deterministic smoke
+        run: |
+          harness run-smoke \
+            --seed "$HARNESS_SEED" \
+            --manifest cartha-qa/harness/smoke-manifest.yml \
+            --quarantine cartha-qa/harness/quarantine.yml \
+            --mobile-dir cartha.ai.mobile \
+            --web-dir cartha.website \
+            --backend-dir cartha-qa \
+            --out-manifest run-manifest.json \
+            --out-report smoke-report.json
+      - name: Upload manifest and report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-${{ github.run_id }}
+          path: |
+            run-manifest.json
+            smoke-report.json
