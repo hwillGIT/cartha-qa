@@ -1,0 +1,80 @@
+# Tag production releases. Watches the App Store; when a new Cartha iOS
+# version ships, tags the newest main commit as of its release date as
+# prod-ios-<version> so the harness can check out exactly what is live.
+# Requires CARTHA_REPO_SECRET to have contents:write on cartha.ai.mobile.
+name: Tag production release
+
+on:
+  schedule:
+    - cron: "0 13 * * 1"  # Mondays, ~9am ET
+  workflow_dispatch:
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check App Store and tag new releases
+        env:
+          GH_TOKEN: ${{ secrets.CARTHA_REPO_SECRET }}
+        run: |
+          python3 - <<'EOF'
+          import json, os, urllib.request, urllib.error
+
+          TOKEN = os.environ["GH_TOKEN"]
+          API = "https://api.github.com"
+
+          def api(path, method="GET", data=None):
+              body = json.dumps(data).encode() if data is not None else None
+              req = urllib.request.Request(
+                  API + path, data=body, method=method,
+                  headers={"Authorization": f"Bearer {TOKEN}",
+                           "Accept": "application/vnd.github+json",
+                           "Content-Type": "application/json",
+                           "User-Agent": "cartha-qa-tag-release"})
+              try:
+                  with urllib.request.urlopen(req) as resp:
+                      return json.load(resp)
+              except urllib.error.HTTPError as e:
+                  print(f"API {method} {path} failed: {e.code}")
+                  raise SystemExit(1)
+
+          # 1. Current App Store version
+          with urllib.request.urlopen(
+                  "https://itunes.apple.com/search?term=cartha+christian+community"
+                  "&entity=software&limit=5") as r:
+              results = json.load(r)["results"]
+          app = next(x for x in results
+                     if x.get("sellerName") == "CARTHA AI, INC."
+                     and x["trackName"].startswith("cartha |"))
+          version = app["version"]
+          rel_date = app["currentVersionReleaseDate"]
+          tag = f"prod-ios-{version}"
+          print(f"App Store: {version} released {rel_date[:10]}")
+
+          # 2. Already tagged?
+          tags = api("/repos/zackseyun/cartha.ai.mobile/tags?per_page=100")
+          if any(t["name"] == tag for t in tags):
+              print(f"{tag} already exists — nothing to do")
+              raise SystemExit(0)
+
+          # 3. Newest main commit as of the release date
+          commits = api("/repos/zackseyun/cartha.ai.mobile/commits"
+                        f"?sha=main&until={rel_date}&per_page=1")
+          sha = commits[0]["sha"]
+          msg = commits[0]["commit"]["message"].split("\n")[0]
+          print(f"tagging {sha[:8]}: {msg}")
+
+          tag_obj = api("/repos/zackseyun/cartha.ai.mobile/git/tags", "POST", {
+              "tag": tag,
+              "message": f"Production iOS release {version} "
+                         f"(App Store, {rel_date[:10]}). Tagged for harness sync.",
+              "object": sha,
+              "type": "commit",
+          })
+          api("/repos/zackseyun/cartha.ai.mobile/git/refs", "POST", {
+              "ref": f"refs/tags/{tag}",
+              "sha": tag_obj["sha"],
+          })
+          print(f"created {tag} -> {sha[:8]}")
+          EOF
