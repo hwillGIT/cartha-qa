@@ -2,7 +2,7 @@ import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from harness import determinism as det
-from harness import smoke, quarantine
+from harness import smoke, quarantine, cli
 
 
 def test_derive_seed_stable():
@@ -42,6 +42,8 @@ def test_smoke_manifest_loads():
     l2 = smoke.select_tests(manifest, "loop2")
     assert len(l1) == 19  # 16 maestro + 3 web
     assert len(l2) == 15  # 12 maestro + 3 web
+    assert "maestro:harness/maestro/launch-fellowship.yaml" in smoke.test_ids(l1)
+    assert not any("00_launch_and_screenshot.yaml" in t["id"] for t in l1)
     # the 4 production-unsafe flows are absent from loop2
     ids2 = " ".join(smoke.test_ids(l2))
     for bad in ("30_hangouts_smoke", "62_profile_audio_call_smoke",
@@ -69,3 +71,90 @@ def test_quarantine_partition():
     assert [t["id"] for t in runnable] == ["a"]
     assert skipped[0]["id"] == "b"
     assert skipped[0]["quarantine"]["reason"] == "flaky"
+
+
+def test_maestro_uses_prepared_simulator():
+    assert cli._maestro_command("flow.yaml", {"SIMULATOR_UDID": "device-123"}) == [
+        "maestro", "test", "--device", "device-123", "flow.yaml"
+    ]
+
+
+def test_qa_owned_maestro_flow_resolves_from_harness(tmp_path):
+    flow = tmp_path / "harness" / "maestro" / "launch.yaml"
+    flow.parent.mkdir(parents=True)
+    flow.write_text("appId: com.cartha.app\n---\n")
+    assert cli._maestro_command("harness/maestro/launch.yaml", {}, str(tmp_path))[-1] == str(flow)
+
+
+def test_qa_stage_reuses_mobile_helper(tmp_path, monkeypatch):
+    seen = {}
+
+    def fake_run(cmd, env, cwd, timeout):
+        seen.update(cmd=cmd, cwd=cwd, timeout=timeout)
+        return {"status": "passed"}
+
+    monkeypatch.setattr(cli, "_run", fake_run)
+    result = cli._qa_setup(
+        {"qa_stage": {"screen": "public_profile", "data": {"user_id": "fixture"},
+                      "launch_app": False}},
+        {"SIMULATOR_UDID": "device-123"}, str(tmp_path))
+    assert result["status"] == "passed"
+    assert seen["cmd"][1].endswith("cartha_ai_mobile/scripts/qa_debug_api.py")
+    assert seen["cmd"][-2:] == ["--data-json", '{"user_id":"fixture"}']
+    assert "--launch-app" not in seen["cmd"]
+
+
+def test_staged_screen_keeps_original_assertions(tmp_path):
+    import yaml
+
+    source = tmp_path / "source.yaml"
+    source.write_text("appId: com.cartha.app\n---\n- openLink: cartha://qa-screen?screen=messages_home\n- assertVisible:\n    id: messages_thread_search_button\n")
+    prepared = tmp_path / "prepared.yaml"
+    cli._without_qa_open_link(str(source), str(prepared), ["Got it"])
+    config, commands = list(yaml.safe_load_all(prepared.read_text()))
+    assert config["appId"] == "com.cartha.app"
+    assert commands == [
+        {"runFlow": {"when": {"visible": "Got it"},
+                     "commands": [{"tapOn": "Got it"}]}},
+        {"assertVisible": {"id": "messages_thread_search_button"}},
+    ]
+
+
+def test_qa_setup_failure_does_not_run_maestro(tmp_path, monkeypatch):
+    monkeypatch.setattr(cli, "_qa_setup", lambda *args: {
+        "status": "failed", "tail": "staging failed", "duration_s": 1})
+    monkeypatch.setattr(cli, "_run", lambda *args: (_ for _ in ()).throw(
+        AssertionError("Maestro must not run without its fixture")))
+    result = cli._run_maestro({"qa_stage": {"screen": "clips_home"}}, "x.yaml",
+                              {"SIMULATOR_UDID": "device-123"},
+                              str(tmp_path), str(tmp_path))
+    assert result["status"] == "error"
+    assert "QA setup failed" in result["tail"]
+
+
+def test_browser_smoke_serves_checked_out_promo(tmp_path, monkeypatch):
+    import urllib.request
+    promo = tmp_path / "redirects"
+    promo.mkdir()
+    (promo / "index.html").write_text("<h1>checked-out promo</h1>")
+    seen = {}
+
+    def fake_run(cmd, env, cwd, timeout):
+        seen["cmd"] = cmd
+        seen["url"] = env["DOWNLOAD_PROMO_URL"]
+        with urllib.request.urlopen(seen["url"]) as response:
+            assert b"checked-out promo" in response.read()
+        return {"status": "passed"}
+
+    monkeypatch.setattr(cli, "_run", fake_run)
+    result = cli._run_browser("test/download-promo.browser.mjs", {}, str(tmp_path), 30)
+    assert result["status"] == "passed"
+    assert seen["cmd"] == ["node", "--test", "test/download-promo.browser.mjs"]
+    assert seen["url"].startswith("http://127.0.0.1:")
+
+
+def test_production_browser_requires_explicit_https_url(tmp_path):
+    result = cli._run_browser("test/download-promo.browser.mjs",
+                              {"HARNESS_PROD": "1"}, str(tmp_path), 30)
+    assert result["status"] == "error"
+    assert "DOWNLOAD_PROMO_URL" in result["tail"]

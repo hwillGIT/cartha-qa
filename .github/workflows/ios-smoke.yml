@@ -1,8 +1,8 @@
 name: iOS Smoke Test
 
-# Runs the Cartha iOS smoke test on the Mac mini self-hosted runner.
-# Applies test-only iOS patches (scene lifecycle for iOS 27 SDK), builds the
-# app, installs on simulator, and runs the Maestro launch flow.
+# Runs the Cartha iOS smoke test on the MacBook self-hosted runner. The shared
+# preparation script handles the installed Xcode version and selects an
+# available iPhone simulator.
 #
 # Required secrets:
 #   CARTHA_REPO_SECRET: GitHub PAT with read access to zackseyun/cartha.ai.mobile
@@ -16,11 +16,11 @@ on:
       ref:
         description: 'Mobile repo ref (branch, tag, or SHA)'
         required: false
-        default: '776b6a583e5bb08013cc9b1c8891e76e93914f34'
+        default: 'main'
       maestro_flow:
-        description: 'Maestro flow to run'
+        description: 'Optional mobile flow (blank runs the current QA launch smoke)'
         required: false
-        default: 'cartha_ai_mobile/.maestro/flows/00_launch_and_screenshot.yaml'
+        default: ''
   push:
     branches: [main]
     paths:
@@ -29,128 +29,49 @@ on:
 
 jobs:
   ios-smoke:
-    # Runs on either Mac; the first step verifies it's the Mac mini (Xcode 27).
-    # Both runners share labels, so we detect the machine at runtime.
-    runs-on: [self-hosted, macOS, ARM64]
-    
-    env:
-      SIMULATOR_UDID: 56CFEE56-2C47-4D93-BD95-E5E11FC6251C
-      APP_BUNDLE_ID: com.cartha.app
-    
+    runs-on: [self-hosted, macOS, ARM64, macbook-qa]
+    timeout-minutes: 90
     steps:
-      - name: Check if Mac mini
-        id: check
-        run: |
-          HOST=$(hostname)
-          echo "Hostname: $HOST"
-          if [[ "$HOST" == *"mac-mini"* ]] || [[ "$HOST" == *"MacMini"* ]] || [ -d "/Applications/Xcode.app" ] && xcodebuild -version 2>/dev/null | grep -q "27"; then
-            echo "is_mini=true" >> $GITHUB_OUTPUT
-            echo "Running on Mac mini, proceeding with iOS build"
-          else
-            echo "is_mini=false" >> $GITHUB_OUTPUT
-            echo "Not the Mac mini (no Xcode 27). Skipping iOS build."
-          fi
-      
       - name: Check out harness
-        if: steps.check.outputs.is_mini == 'true'
         uses: actions/checkout@v4
-      
       - name: Check out mobile repo
-        if: steps.check.outputs.is_mini == 'true'
         uses: actions/checkout@v4
         with:
           repository: zackseyun/cartha.ai.mobile
           ref: ${{ inputs.ref || 'main' }}
           path: cartha.ai.mobile
           token: ${{ secrets.CARTHA_REPO_SECRET }}
-      
       - name: Set up toolchain PATH
-        if: steps.check.outputs.is_mini == 'true'
         run: |
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-          echo "/opt/homebrew/bin" >> $GITHUB_PATH
-          echo "$HOME/dev/flutter/bin" >> $GITHUB_PATH
-          echo "$HOME/dev/java/Contents/Home/bin" >> $GITHUB_PATH
-          echo "$HOME/.maestro/bin" >> $GITHUB_PATH
-      
+          for d in /opt/homebrew/bin "$HOME/.cargo/bin" "$HOME/.maestro/bin" \
+                   "$HOME/dev/flutter/bin" "$HOME/toolchain/flutter/bin" \
+                   "$HOME/dev/java/Contents/Home/bin" "$HOME/toolchain/java/Contents/Home/bin"; do
+            [ ! -d "$d" ] || echo "$d" >> "$GITHUB_PATH"
+          done
+          command -v xcodebuild
       - name: Verify mobile ref
-        if: steps.check.outputs.is_mini == 'true'
         run: |
-          cd cartha.ai.mobile
-          echo "Testing ref: $(git rev-parse HEAD)"
-          echo "Branch: $(git rev-parse --abbrev-ref HEAD)"
-          git log -1 --oneline
-      
-      - name: Apply iOS test patches
-        if: steps.check.outputs.is_mini == 'true'
-        run: |
-          ./ios-patches/apply-ios-patches.sh "$GITHUB_WORKSPACE/cartha.ai.mobile/cartha_ai_mobile"
-      
-      - name: Get Flutter dependencies
-        if: steps.check.outputs.is_mini == 'true'
-        run: |
-          cd cartha.ai.mobile/cartha_ai_mobile
-          flutter pub get
-      
-      - name: Patch flutter_contacts for scenes
-        if: steps.check.outputs.is_mini == 'true'
-        run: |
-          ./ios-patches/patch-flutter-contacts.sh
-      
-      - name: Build iOS simulator app
-        if: steps.check.outputs.is_mini == 'true'
-        run: |
-          cd cartha.ai.mobile/cartha_ai_mobile
-          # Verify patches were applied
-          echo "=== Patch verification ==="
-          grep -q "QA harness: Xcode 27" ios/Podfile && echo "Podfile: PATCHED" || echo "Podfile: NOT PATCHED"
-          grep -q "UIApplicationSceneManifest" ios/Runner/Info.plist && echo "Info.plist: PATCHED" || echo "Info.plist: NOT PATCHED"
-          [ -f ios/Runner/SceneDelegate.swift ] && echo "SceneDelegate.swift: EXISTS" || echo "SceneDelegate.swift: MISSING"
-          grep -q "SceneDelegate.swift in Sources" ios/Runner.xcodeproj/project.pbxproj && echo "pbxproj: PATCHED" || echo "pbxproj: NOT PATCHED"
-          echo "=== Starting build ==="
-          # Stage Cloud projects aside (multi-project build workaround)
-          mkdir -p build/ios_cloud_project_stage
-          mv ios/*Cloud.xcodeproj build/ios_cloud_project_stage/ 2>/dev/null || true
-          flutter build ios --simulator > /tmp/build.log 2>&1 || BUILD_FAILED=1
-          # Restore Cloud projects
-          mv build/ios_cloud_project_stage/*Cloud.xcodeproj ios/ 2>/dev/null || true
-          echo "=== Build output (last 80 lines) ==="
-          tail -80 /tmp/build.log || true
-          if [ "${BUILD_FAILED:-0}" = "1" ]; then
-            echo "Build FAILED"
-            exit 1
-          fi
-          echo "Build complete"
-      
+          git -C cartha.ai.mobile rev-parse HEAD
+      - name: Build and install on iPhone simulator
+        run: ./ios-patches/build-and-install-simulator.sh "$GITHUB_WORKSPACE/cartha.ai.mobile/cartha_ai_mobile"
       - name: Upload build log
-        if: always() && steps.check.outputs.is_mini == 'true'
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: build-log
-          path: /tmp/build.log
+          path: ${{ runner.temp }}/cartha-ios-build.log
           retention-days: 7
-      
-      - name: Strip app extensions and install
-        if: steps.check.outputs.is_mini == 'true'
-        run: |
-          # App extensions cause "Invalid placeholder attributes" on simulator
-          rm -rf /tmp/RunnerNoExt.app
-          cp -R cartha.ai.mobile/cartha_ai_mobile/build/ios/iphonesimulator/Runner.app /tmp/RunnerNoExt.app
-          rm -rf /tmp/RunnerNoExt.app/PlugIns
-          xcrun simctl install "$SIMULATOR_UDID" /tmp/RunnerNoExt.app
-          echo "Installed (extensions stripped)"
-      
-      - name: Boot simulator
-        if: steps.check.outputs.is_mini == 'true'
-        run: |
-          xcrun simctl boot "$SIMULATOR_UDID" 2>/dev/null || echo "Simulator already booted"
-      
+      - name: Dismiss optional first-run tutorial
+        run: maestro test --device "$SIMULATOR_UDID" harness/maestro/prepare-first-run.yaml
       - name: Run Maestro flow
-        if: steps.check.outputs.is_mini == 'true'
+        working-directory: cartha.ai.mobile
+        env:
+          MAESTRO_FLOW: ${{ inputs.maestro_flow }}
         run: |
-          cd cartha.ai.mobile/cartha_ai_mobile
-          maestro test --device "$SIMULATOR_UDID" "${{ inputs.maestro_flow || 'cartha_ai_mobile/.maestro/flows/00_launch_and_screenshot.yaml' }}"
-      
+          if [ -z "$MAESTRO_FLOW" ]; then
+            MAESTRO_FLOW="$GITHUB_WORKSPACE/harness/maestro/launch-fellowship.yaml"
+          fi
+          maestro test --device "$SIMULATOR_UDID" "$MAESTRO_FLOW"
       - name: Upload screenshots
         if: always()
         uses: actions/upload-artifact@v4

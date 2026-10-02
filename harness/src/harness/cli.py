@@ -5,11 +5,18 @@ Thin YAML workflows call these commands; all behavior lives here.
 from __future__ import annotations
 
 import argparse
+from functools import partial
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
 import subprocess
 import sys
+import tempfile
+from threading import Thread
 import time
+from urllib.parse import urlparse
+
+import yaml
 
 from . import determinism as det
 from . import quarantine as quar
@@ -57,11 +64,154 @@ def _base_env(master_seed: str, clock: str | None) -> dict:
     return env
 
 
+def _maestro_command(ref: str, env: dict, harness_dir: str = ".") -> list[str]:
+    device = env.get("SIMULATOR_UDID")
+    # QA-owned flows live with the harness; upstream flows remain relative to
+    # the mobile checkout. An absolute path works from either working dir.
+    qa_flow = os.path.join(os.path.abspath(harness_dir), ref)
+    flow = qa_flow if os.path.isfile(qa_flow) else ref
+    return ["maestro", "test", *(["--device", device] if device else []), flow]
+
+
+def _qa_setup(test: dict, env: dict, mobile_dir: str) -> dict | None:
+    """Reuse the mobile repo's existing simulator QA handoff, loop 1 only."""
+    stage = test.get("qa_stage")
+    seed_group = test.get("qa_seed_meet_group", False)
+    if not stage and not seed_group:
+        return None
+    udid = env.get("SIMULATOR_UDID")
+    if not udid:
+        return {"command": "QA simulator setup", "status": "error",
+                "returncode": -1, "duration_s": 0,
+                "tail": "QA staging requires SIMULATOR_UDID"}
+    scripts = os.path.join(os.path.abspath(mobile_dir), "cartha_ai_mobile", "scripts")
+    if seed_group:
+        cmd = ["bash", os.path.join(scripts, "qa_seed_meet_group.sh"),
+               "--udid", udid,
+               "--user-email", "testuser1@yopmail.com",
+               "--user-email", "testuser2@yopmail.com",
+               "--user-email", "carthaomegle1@yopmail.com"]
+        timeout = 90
+    else:
+        cmd = [sys.executable, os.path.join(scripts, "qa_debug_api.py"),
+               "stage-qa-screen", "--udid", udid, "--screen", stage["screen"]]
+        if stage.get("data"):
+            cmd += ["--data-json", json.dumps(stage["data"], separators=(",", ":"))]
+        if stage.get("launch_app", True):
+            cmd.append("--launch-app")
+        timeout = 60
+    return _run(cmd, env, mobile_dir, timeout)
+
+
+def _without_qa_open_link(flow: str, destination: str,
+                          dismiss: list[str] | None = None) -> str:
+    """Use the already-staged QA screen, keeping upstream UI assertions intact.
+
+    The iOS simulator's custom-scheme openLink is unreliable: it can show an OS
+    confirmation or leave the app on its previous screen. The mobile repo's
+    stage-qa-screen helper is the established prompt-free path for this lane.
+    """
+    with open(flow) as source:
+        docs = list(yaml.safe_load_all(source))
+    if len(docs) != 2 or not isinstance(docs[1], list):
+        raise ValueError(f"expected a two-document Maestro flow: {flow}")
+    commands = [command for command in docs[1]
+                if not (isinstance(command, dict) and "openLink" in command)]
+    if len(docs[1]) - len(commands) != 1:
+        raise ValueError(f"expected exactly one QA openLink in {flow}")
+    for label in reversed(dismiss or []):
+        commands.insert(0, {"runFlow": {"when": {"visible": label},
+                                        "commands": [{"tapOn": label}]}})
+    with open(destination, "w") as prepared:
+        yaml.safe_dump(docs[0], prepared, sort_keys=False)
+        prepared.write("---\n")
+        yaml.safe_dump(commands, prepared, sort_keys=False)
+    return destination
+
+
+def _run_maestro(test: dict, ref: str, env: dict,
+                 mobile_dir: str, harness_dir: str) -> dict:
+    if test.get("qa_use_staged_screen") and not test.get("qa_stage"):
+        return {"command": "QA simulator setup", "status": "error",
+                "returncode": -1, "duration_s": 0,
+                "tail": "qa_use_staged_screen requires qa_stage"}
+    setup = _qa_setup(test, env, mobile_dir)
+    if setup is not None and setup.get("status") != "passed":
+        return {**setup, "status": "error",
+                "tail": f"QA setup failed: {setup.get('tail', '')}"}
+    try:
+        cmd = _maestro_command(ref, env, harness_dir)
+        result_dir = os.path.abspath(os.path.join(
+            "maestro-results", env.get("GITHUB_RUN_ID", "local"),
+            os.path.splitext(os.path.basename(ref))[0]))
+        os.makedirs(result_dir, exist_ok=True)
+        cmd[-1:-1] = ["--test-output-dir", result_dir]
+        with tempfile.TemporaryDirectory(prefix="cartha-maestro-") as temp_dir:
+            if test.get("qa_use_staged_screen") and env.get("SIMULATOR_UDID"):
+                flow = cmd[-1]
+                source = flow if os.path.isabs(flow) else os.path.join(mobile_dir, flow)
+                cmd[-1] = _without_qa_open_link(
+                    source, os.path.join(temp_dir, os.path.basename(flow)),
+                    test.get("qa_dismiss"))
+            return _run(cmd, env, mobile_dir, test.get("timeout_s", 600))
+    except (OSError, ValueError, yaml.YAMLError) as exc:
+        return {"command": f"prepare Maestro flow {ref}", "status": "error",
+                "returncode": -1, "duration_s": 0,
+                "tail": f"QA flow preparation failed: {exc}"}
+
+
+class _QuietStaticHandler(SimpleHTTPRequestHandler):
+    def log_message(self, format: str, *args: object) -> None:
+        pass
+
+
+def _run_browser(ref: str, env: dict, web_dir: str, timeout: int) -> dict:
+    """Run the website's node:test browser suite against an explicit URL.
+
+    Loop 1 serves the checked-out static promo locally. Loop 2 must be given
+    an HTTPS production URL; it must never silently skip the browser test.
+    """
+    browser_env = env.copy()
+    if env.get("HARNESS_PROD") == "1":
+        url = env.get("DOWNLOAD_PROMO_URL", "")
+        if urlparse(url).scheme != "https":
+            return {"command": f"node --test {ref}", "status": "error",
+                    "returncode": -1, "duration_s": 0,
+                    "tail": "DOWNLOAD_PROMO_URL must be an HTTPS production URL"}
+        return _run(["node", "--test", ref], browser_env, web_dir, timeout)
+
+    static_dir = os.path.join(os.path.abspath(web_dir), "redirects")
+    if not os.path.isfile(os.path.join(static_dir, "index.html")):
+        return {"command": f"node --test {ref}", "status": "error",
+                "returncode": -1, "duration_s": 0,
+                "tail": f"static promo missing: {static_dir}/index.html"}
+    handler = partial(_QuietStaticHandler, directory=static_dir)
+    with ThreadingHTTPServer(("127.0.0.1", 0), handler) as server:
+        port = server.server_address[1]
+        browser_env["DOWNLOAD_PROMO_URL"] = f"http://127.0.0.1:{port}"
+        thread = Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            return _run(["node", "--test", ref], browser_env, web_dir, timeout)
+        finally:
+            server.shutdown()
+            thread.join()
+
+
 def cmd_run_smoke(args: argparse.Namespace) -> int:
     manifest = smoke.load_manifest(args.manifest)
     tests = smoke.select_tests(
         manifest, "loop1", args.shard_index, args.shard_total
     )
+    if args.kinds:
+        kinds = set(args.kinds.split(","))
+        unknown = kinds - {"maestro", "playwright", "node", "flutter", "go"}
+        if unknown:
+            raise ValueError(f"unknown test kinds: {sorted(unknown)}")
+        tests = [t for t in tests if t["id"].split(":", 1)[0] in kinds]
+    if not tests:
+        print("no tests selected; refusing to report a passing smoke run", file=sys.stderr)
+        return 2
     quarantined = quar.load_quarantine(args.quarantine)
     runnable, skipped = quar.partition(tests, quarantined)
 
@@ -74,7 +224,7 @@ def cmd_run_smoke(args: argparse.Namespace) -> int:
             "mobile": det.git_sha(args.mobile_dir),
             "web": det.git_sha(args.web_dir),
             "backend": det.git_sha(args.backend_dir),
-            "harness": det.git_sha(os.getcwd()),
+            "harness": det.git_sha(args.backend_dir),
         },
     )
     det.write_manifest(run_manifest, args.out_manifest)
@@ -85,10 +235,10 @@ def cmd_run_smoke(args: argparse.Namespace) -> int:
     for t in runnable:
         kind, ref = t["id"].split(":", 1)
         if kind == "maestro":
-            cmd = ["maestro", "test", ref]
+            cmd = None
             cwd = args.mobile_dir
         elif kind == "playwright":
-            cmd = ["npx", "playwright", "test", ref]
+            cmd = None
             cwd = args.web_dir
         elif kind == "node":
             cmd = ["npm", "run", ref]
@@ -105,7 +255,12 @@ def cmd_run_smoke(args: argparse.Namespace) -> int:
                             "tail": f"unknown test kind: {kind}"})
             continue
         print(f"run {t['id']} ...", flush=True)
-        r = _run(cmd, env, cwd, t.get("timeout_s", 600))
+        if kind == "maestro":
+            r = _run_maestro(t, ref, env, cwd, args.backend_dir)
+        elif kind == "playwright":
+            r = _run_browser(ref, env, cwd, t.get("timeout_s", 600))
+        else:
+            r = _run(cmd, env, cwd, t.get("timeout_s", 600))
         r["id"] = t["id"]
         results.append(r)
         print(f"  {r['status']} ({r['duration_s']}s)")
@@ -147,11 +302,14 @@ def cmd_verify_prod(args: argparse.Namespace) -> int:
     for t in tests:
         kind, ref = t["id"].split(":", 1)
         cwd = args.mobile_dir if kind in ("maestro", "flutter") else args.web_dir
-        cmd = {"maestro": ["maestro", "test", ref],
-               "playwright": ["npx", "playwright", "test", ref],
+        cmd = {"maestro": _maestro_command(ref, env, args.harness_dir),
+               "playwright": ["node", "--test", ref],
                "node": ["npm", "run", ref]}[kind]
         print(f"run {t['id']} ...", flush=True)
-        r = _run(cmd, env, cwd, t.get("timeout_s", 300))
+        if kind == "playwright":
+            r = _run_browser(ref, env, cwd, t.get("timeout_s", 300))
+        else:
+            r = _run(cmd, env, cwd, t.get("timeout_s", 300))
         r["id"] = t["id"]
         results.append(r)
         print(f"  {r['status']} ({r['duration_s']}s)")
@@ -199,6 +357,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--backend-dir", default=".")
     s.add_argument("--shard-index", type=int, default=0)
     s.add_argument("--shard-total", type=int, default=1)
+    s.add_argument("--kinds", default="", help="Comma-separated test kinds to run")
     s.add_argument("--out-manifest", default="run-manifest.json")
     s.add_argument("--out-report", default="smoke-report.json")
     s.set_defaults(func=cmd_run_smoke)
@@ -210,6 +369,7 @@ def build_parser() -> argparse.ArgumentParser:
     v.add_argument("--manifest", default=None)
     v.add_argument("--mobile-dir", default=".")
     v.add_argument("--web-dir", default=".")
+    v.add_argument("--harness-dir", default=".")
     v.add_argument("--out-manifest", default="prod-manifest.json")
     v.set_defaults(func=cmd_verify_prod)
 

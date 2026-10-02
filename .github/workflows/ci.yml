@@ -23,8 +23,8 @@ env:
 
 jobs:
   smoke:
-    runs-on: [self-hosted, macOS, ARM64]  # mobile needs the Mac runner
-    timeout-minutes: 60
+    runs-on: [self-hosted, macOS, ARM64, macbook-qa]
+    timeout-minutes: 120
     steps:
       - name: Check repo access token
         run: |
@@ -55,7 +55,8 @@ jobs:
       - name: Add toolchain to PATH
         run: |
           # mini uses ~/dev, macbook uses ~/toolchain (+ brew for node/go)
-          for d in "$HOME/dev/flutter/bin" "$HOME/toolchain/flutter/bin" \
+          for d in "$HOME/.cargo/bin" \
+                   "$HOME/dev/flutter/bin" "$HOME/toolchain/flutter/bin" \
                    "$HOME/dev/node/bin" "$HOME/toolchain/node/bin" \
                    "$HOME/.maestro/bin" \
                    "$HOME/dev/go/bin" "$HOME/toolchain/go/bin" \
@@ -74,6 +75,15 @@ jobs:
           "$RUNNER_TEMP/harness-venv/bin/pip" install --quiet --upgrade pip
           "$RUNNER_TEMP/harness-venv/bin/pip" install ./cartha-qa/harness
           echo "$RUNNER_TEMP/harness-venv/bin" >> "$GITHUB_PATH"
+      - name: Install web dependencies and browser driver
+        run: |
+          cd cartha.website
+          npm ci
+          npm install --no-save --package-lock=false playwright@1.63.0
+      - name: Build and install iOS simulator app
+        run: ./cartha-qa/ios-patches/build-and-install-simulator.sh "$GITHUB_WORKSPACE/cartha.ai.mobile/cartha_ai_mobile"
+      - name: Dismiss optional first-run tutorial
+        run: maestro test --device "$SIMULATOR_UDID" cartha-qa/harness/maestro/prepare-first-run.yaml
       - name: Run deterministic smoke
         run: |
           harness run-smoke \
@@ -93,3 +103,6 @@ jobs:
           path: |
             run-manifest.json
             smoke-report.json
+            maestro-results/${{ github.run_id }}/
+            ${{ runner.temp }}/cartha-ios-build.log
+            cartha.website/tmp/download-promo-qa/
