@@ -46,6 +46,12 @@ jobs:
           repository: zackseyun/cartha.website
           token: ${{ secrets.CARTHA_REPO_SECRET }}
           path: cartha.website
+      - name: Add toolchain to PATH
+        run: |
+          for d in "$HOME/dev/flutter/bin" "$HOME/dev/node/bin" "$HOME/.maestro/bin" "$HOME/dev/go/bin" "$HOME/dev/java/Contents/Home/bin"; do
+            echo "$d" >> "$GITHUB_PATH"
+          done
+          echo "JAVA_HOME=$HOME/dev/java/Contents/Home" >> "$GITHUB_ENV"
       - name: Install harness CLI
         run: |
           python3 -m venv "$RUNNER_TEMP/harness-venv"
