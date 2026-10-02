@@ -20,14 +20,31 @@ on:
 
 jobs:
   web-smoke:
-    # Target MacBook by name (has Playwright Chromium verified)
-    runs-on: Huberts-MacBook
+    # Runs on either Mac; the first step verifies it's the MacBook (Playwright).
+    # Both runners share labels, so we detect the machine at runtime.
+    # (Mac mini is offline; ignored for now.)
+    runs-on: [self-hosted, macOS, ARM64]
     
     steps:
+      - name: Check if MacBook
+        id: check
+        run: |
+          HOST=$(hostname)
+          echo "Hostname: $HOST"
+          if [[ "$HOST" == *"MacBook"* ]]; then
+            echo "is_macbook=true" >> $GITHUB_OUTPUT
+            echo "Running on MacBook, proceeding with web tests"
+          else
+            echo "is_macbook=false" >> $GITHUB_OUTPUT
+            echo "Not the MacBook. Skipping web tests."
+          fi
+      
       - name: Check out harness
+        if: steps.check.outputs.is_macbook == 'true'
         uses: actions/checkout@v4
       
       - name: Check out website repo
+        if: steps.check.outputs.is_macbook == 'true'
         uses: actions/checkout@v4
         with:
           repository: zackseyun/cartha.website
@@ -36,17 +53,20 @@ jobs:
           token: ${{ secrets.CARTHA_REPO_SECRET }}
       
       - name: Set up Node
+        if: steps.check.outputs.is_macbook == 'true'
         run: |
           echo "/opt/homebrew/bin" >> $GITHUB_PATH
           node --version
           npm --version
       
       - name: Install dependencies
+        if: steps.check.outputs.is_macbook == 'true'
         run: |
           cd cartha.website
           npm ci
       
       - name: Verify Playwright Chromium
+        if: steps.check.outputs.is_macbook == 'true'
         run: |
           cd cartha.website
           npx playwright install chromium --dry-run 2>&1 | head -5 || true
@@ -61,6 +81,7 @@ jobs:
           "
       
       - name: Run web smoke tests
+        if: steps.check.outputs.is_macbook == 'true'
         run: |
           cd cartha.website
           # Run the smoke-tier Playwright tests from the manifest
