@@ -111,15 +111,24 @@ jobs:
           # Stage Cloud projects aside (multi-project build workaround)
           mkdir -p build/ios_cloud_project_stage
           mv ios/*Cloud.xcodeproj build/ios_cloud_project_stage/ 2>/dev/null || true
-          flutter build ios --simulator 2>&1 | tail -50
-          BUILD_STATUS=${PIPESTATUS[0]}
+          flutter build ios --simulator > /tmp/build.log 2>&1 || BUILD_FAILED=1
           # Restore Cloud projects
           mv build/ios_cloud_project_stage/*Cloud.xcodeproj ios/ 2>/dev/null || true
-          if [ $BUILD_STATUS -ne 0 ]; then
-            echo "Build FAILED with status $BUILD_STATUS"
+          echo "=== Build output (last 80 lines) ==="
+          tail -80 /tmp/build.log || true
+          if [ "${BUILD_FAILED:-0}" = "1" ]; then
+            echo "Build FAILED"
             exit 1
           fi
-          echo "Build complete: $(ls -lh build/ios/iphonesimulator/Runner.app | awk '{print $5}')"
+          echo "Build complete"
+      
+      - name: Upload build log
+        if: always() && steps.check.outputs.is_mini == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: /tmp/build.log
+          retention-days: 7
       
       - name: Strip app extensions and install
         if: steps.check.outputs.is_mini == 'true'
