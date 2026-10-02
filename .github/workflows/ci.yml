@@ -82,6 +82,8 @@ jobs:
           npm install --no-save --package-lock=false playwright@1.63.0
       - name: Build and install iOS simulator app
         run: ./cartha-qa/ios-patches/build-and-install-simulator.sh "$GITHUB_WORKSPACE/cartha.ai.mobile/cartha_ai_mobile"
+      - name: Dismiss optional first-run tutorial
+        run: maestro test --device "$SIMULATOR_UDID" cartha-qa/harness/maestro/prepare-first-run.yaml
       - name: Run deterministic smoke
         run: |
           harness run-smoke \

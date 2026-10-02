@@ -42,6 +42,8 @@ def test_smoke_manifest_loads():
     l2 = smoke.select_tests(manifest, "loop2")
     assert len(l1) == 19  # 16 maestro + 3 web
     assert len(l2) == 15  # 12 maestro + 3 web
+    assert "maestro:harness/maestro/launch-fellowship.yaml" in smoke.test_ids(l1)
+    assert not any("00_launch_and_screenshot.yaml" in t["id"] for t in l1)
     # the 4 production-unsafe flows are absent from loop2
     ids2 = " ".join(smoke.test_ids(l2))
     for bad in ("30_hangouts_smoke", "62_profile_audio_call_smoke",
@@ -75,6 +77,13 @@ def test_maestro_uses_prepared_simulator():
     assert cli._maestro_command("flow.yaml", {"SIMULATOR_UDID": "device-123"}) == [
         "maestro", "test", "--device", "device-123", "flow.yaml"
     ]
+
+
+def test_qa_owned_maestro_flow_resolves_from_harness(tmp_path):
+    flow = tmp_path / "harness" / "maestro" / "launch.yaml"
+    flow.parent.mkdir(parents=True)
+    flow.write_text("appId: com.cartha.app\n---\n")
+    assert cli._maestro_command("harness/maestro/launch.yaml", {}, str(tmp_path))[-1] == str(flow)
 
 
 def test_browser_smoke_serves_checked_out_promo(tmp_path, monkeypatch):

@@ -61,9 +61,13 @@ def _base_env(master_seed: str, clock: str | None) -> dict:
     return env
 
 
-def _maestro_command(ref: str, env: dict) -> list[str]:
+def _maestro_command(ref: str, env: dict, harness_dir: str = ".") -> list[str]:
     device = env.get("SIMULATOR_UDID")
-    return ["maestro", "test", *(["--device", device] if device else []), ref]
+    # QA-owned flows live with the harness; upstream flows remain relative to
+    # the mobile checkout. An absolute path works from either working dir.
+    qa_flow = os.path.join(os.path.abspath(harness_dir), ref)
+    flow = qa_flow if os.path.isfile(qa_flow) else ref
+    return ["maestro", "test", *(["--device", device] if device else []), flow]
 
 
 class _QuietStaticHandler(SimpleHTTPRequestHandler):
@@ -141,7 +145,7 @@ def cmd_run_smoke(args: argparse.Namespace) -> int:
     for t in runnable:
         kind, ref = t["id"].split(":", 1)
         if kind == "maestro":
-            cmd = _maestro_command(ref, env)
+            cmd = _maestro_command(ref, env, args.backend_dir)
             cwd = args.mobile_dir
         elif kind == "playwright":
             cmd = None
@@ -206,7 +210,7 @@ def cmd_verify_prod(args: argparse.Namespace) -> int:
     for t in tests:
         kind, ref = t["id"].split(":", 1)
         cwd = args.mobile_dir if kind in ("maestro", "flutter") else args.web_dir
-        cmd = {"maestro": _maestro_command(ref, env),
+        cmd = {"maestro": _maestro_command(ref, env, args.harness_dir),
                "playwright": ["node", "--test", ref],
                "node": ["npm", "run", ref]}[kind]
         print(f"run {t['id']} ...", flush=True)
@@ -273,6 +277,7 @@ def build_parser() -> argparse.ArgumentParser:
     v.add_argument("--manifest", default=None)
     v.add_argument("--mobile-dir", default=".")
     v.add_argument("--web-dir", default=".")
+    v.add_argument("--harness-dir", default=".")
     v.add_argument("--out-manifest", default="prod-manifest.json")
     v.set_defaults(func=cmd_verify_prod)
 

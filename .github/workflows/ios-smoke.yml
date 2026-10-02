@@ -18,9 +18,9 @@ on:
         required: false
         default: 'main'
       maestro_flow:
-        description: 'Maestro flow to run'
+        description: 'Optional mobile flow (blank runs the current QA launch smoke)'
         required: false
-        default: 'cartha_ai_mobile/.maestro/flows/00_launch_and_screenshot.yaml'
+        default: ''
   push:
     branches: [main]
     paths:
@@ -61,11 +61,16 @@ jobs:
           name: build-log
           path: ${{ runner.temp }}/cartha-ios-build.log
           retention-days: 7
+      - name: Dismiss optional first-run tutorial
+        run: maestro test --device "$SIMULATOR_UDID" harness/maestro/prepare-first-run.yaml
       - name: Run Maestro flow
         working-directory: cartha.ai.mobile
         env:
-          MAESTRO_FLOW: ${{ inputs.maestro_flow || 'cartha_ai_mobile/.maestro/flows/00_launch_and_screenshot.yaml' }}
+          MAESTRO_FLOW: ${{ inputs.maestro_flow }}
         run: |
+          if [ -z "$MAESTRO_FLOW" ]; then
+            MAESTRO_FLOW="$GITHUB_WORKSPACE/harness/maestro/launch-fellowship.yaml"
+          fi
           maestro test --device "$SIMULATOR_UDID" "$MAESTRO_FLOW"
       - name: Upload screenshots
         if: always()

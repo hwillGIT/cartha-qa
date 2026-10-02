@@ -1,0 +1,14 @@
+# Current cold-launch shell smoke. Read-only: never starts a live room or queue.
+appId: com.cartha.app
+tags:
+  - smoke
+  - launch
+---
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible: "Start Open Fellowship"
+    timeout: 15000
+- assertVisible: "Find My Fellowship"
+- assertNotVisible: "Skip tour"
+- takeScreenshot: "launch_fellowship_home"

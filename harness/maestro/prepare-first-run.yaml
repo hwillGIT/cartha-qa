@@ -1,0 +1,13 @@
+# Test setup only: clear the optional first-install tutorial so smoke flows
+# start from the app shell. The application tests themselves remain unchanged.
+appId: com.cartha.app
+---
+- launchApp
+- waitForAnimationToEnd:
+    timeout: 15000
+- runFlow:
+    when:
+      visible: "Skip tour"
+    commands:
+      - tapOn: "Skip tour"
+      - waitForAnimationToEnd

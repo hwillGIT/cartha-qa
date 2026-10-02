@@ -6,7 +6,9 @@ version: 1
 loop1:
   description: Deterministic baseline smoke — QA-staged, seeded, non-blocking.
   tests:
-    - {id: "maestro:cartha_ai_mobile/.maestro/flows/00_launch_and_screenshot.yaml", timeout_s: 180}
+    # The upstream 00_launch flow still asserts the retired connect chooser on
+    # default home. This QA-owned flow verifies the current Fellowship shell.
+    - {id: "maestro:harness/maestro/launch-fellowship.yaml", timeout_s: 180}
     - {id: "maestro:cartha_ai_mobile/.maestro/flows/00_login.yaml", timeout_s: 300}
     - {id: "maestro:cartha_ai_mobile/.maestro/flows/01_clips_feed.yaml", timeout_s: 300}
     - {id: "maestro:cartha_ai_mobile/.maestro/flows/04_messages.yaml", timeout_s: 300}
@@ -28,7 +30,7 @@ loop1:
 loop2:
   description: Production verification — test accounts, non-destructive only.
   tests:
-    - {id: "maestro:cartha_ai_mobile/.maestro/flows/00_launch_and_screenshot.yaml", timeout_s: 180}
+    - {id: "maestro:harness/maestro/launch-fellowship.yaml", timeout_s: 180}
     - {id: "maestro:cartha_ai_mobile/.maestro/flows/00_login.yaml", timeout_s: 300, test_account: true}
     - {id: "maestro:cartha_ai_mobile/.maestro/flows/01_clips_feed.yaml", timeout_s: 300}
     - {id: "maestro:cartha_ai_mobile/.maestro/flows/04_messages.yaml", timeout_s: 300, test_account: true}
