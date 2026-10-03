@@ -74,7 +74,62 @@ jobs:
           "$RUNNER_TEMP/harness-venv/bin/pip" install --quiet --upgrade pip
           "$RUNNER_TEMP/harness-venv/bin/pip" install ./cartha-qa/harness
           echo "$RUNNER_TEMP/harness-venv/bin" >> "$GITHUB_PATH"
+      - name: Detect machine and simulator
+        id: machine
+        run: |
+          HOST=$(hostname)
+          echo "Hostname: $HOST"
+          if [[ "$HOST" == *"MacBook"* ]]; then
+            echo "sim_udid=B69B528D-87BD-4897-AA0D-CFB8DBEC6073" >> $GITHUB_OUTPUT
+            echo "machine=macbook" >> $GITHUB_OUTPUT
+            echo "Using MacBook iPhone 17 simulator"
+          else
+            echo "sim_udid=56CFEE56-2C47-4D93-BD95-E5E11FC6251C" >> $GITHUB_OUTPUT
+            echo "machine=mini" >> $GITHUB_OUTPUT
+            echo "Using Mac mini iPhone 17 simulator"
+          fi
+      - name: Apply iOS test patches
+        run: |
+          ./cartha-qa/ios-patches/apply-ios-patches.sh "$GITHUB_WORKSPACE/cartha.ai.mobile/cartha_ai_mobile"
+      - name: Get Flutter dependencies
+        run: |
+          cd cartha.ai.mobile/cartha_ai_mobile
+          flutter pub get
+      - name: Patch flutter_contacts for scenes
+        run: |
+          ./cartha-qa/ios-patches/patch-flutter-contacts.sh
+      - name: Build iOS simulator app
+        run: |
+          cd cartha.ai.mobile/cartha_ai_mobile
+          mkdir -p build/ios_cloud_project_stage
+          mv ios/*Cloud.xcodeproj build/ios_cloud_project_stage/ 2>/dev/null || true
+          flutter build ios --simulator > /tmp/build.log 2>&1 || BUILD_FAILED=1
+          mv build/ios_cloud_project_stage/*Cloud.xcodeproj ios/ 2>/dev/null || true
+          tail -50 /tmp/build.log || true
+          if [ "${BUILD_FAILED:-0}" = "1" ]; then
+            echo "Build FAILED"
+            exit 1
+          fi
+          echo "Build complete"
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log-${{ github.run_id }}
+          path: /tmp/build.log
+          retention-days: 7
+      - name: Boot simulator and install app
+        run: |
+          SIM_UDID="${{ steps.machine.outputs.sim_udid }}"
+          xcrun simctl boot "$SIM_UDID" 2>/dev/null || echo "Simulator already booted"
+          rm -rf /tmp/RunnerNoExt.app
+          cp -R cartha.ai.mobile/cartha_ai_mobile/build/ios/iphonesimulator/Runner.app /tmp/RunnerNoExt.app
+          rm -rf /tmp/RunnerNoExt.app/PlugIns
+          xcrun simctl install "$SIM_UDID" /tmp/RunnerNoExt.app
+          echo "Installed on $SIM_UDID"
       - name: Run deterministic smoke
+        env:
+          SIMULATOR_UDID: ${{ steps.machine.outputs.sim_udid }}
         run: |
           harness run-smoke \
             --seed "$HARNESS_SEED" \
