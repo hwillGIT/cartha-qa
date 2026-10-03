@@ -90,14 +90,14 @@ jobs:
           fi
       - name: Apply iOS test patches
         run: |
-          ./cartha-qa/ios-patches/apply-ios-patches.sh "$GITHUB_WORKSPACE/cartha.ai.mobile/cartha_ai_mobile"
+          bash ./cartha-qa/ios-patches/apply-ios-patches.sh "$GITHUB_WORKSPACE/cartha.ai.mobile/cartha_ai_mobile"
       - name: Get Flutter dependencies
         run: |
           cd cartha.ai.mobile/cartha_ai_mobile
           flutter pub get
       - name: Patch flutter_contacts for scenes
         run: |
-          ./cartha-qa/ios-patches/patch-flutter-contacts.sh
+          bash ./cartha-qa/ios-patches/patch-flutter-contacts.sh
       - name: Build iOS simulator app
         run: |
           cd cartha.ai.mobile/cartha_ai_mobile
