@@ -154,7 +154,7 @@ jobs:
           FLOW="cartha.ai.mobile/cartha_ai_mobile/.maestro/flows/00_launch_and_screenshot.yaml"
           if grep -q "connect_chooser_match" "$FLOW"; then
             # Replace id-based assertion with text-based (Fellowship is visible text, not an ID)
-            sed -i.bak 's/id: connect_chooser_match/text: "Fellowship"/g' "$FLOW"
+            sed -i.bak 's/id: "connect_chooser_match"/text: "Fellowship"/g' "$FLOW"
             echo "Flow patched to assert Fellowship text"
           fi
       - name: Run Maestro flow
