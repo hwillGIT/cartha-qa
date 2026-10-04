@@ -1,7 +1,7 @@
 name: iOS Smoke Test
 
 # Runs the Cartha iOS smoke test on the Mac mini self-hosted runner.
-# Applies test-only iOS patches (scene lifecycle for iOS 27 SDK), builds the
+# Applies test-only iOS patches (scene lifecycle for iOS SDK), builds the
 # app, installs on simulator, and runs the Maestro launch flow.
 #
 # Required secrets:
@@ -29,7 +29,7 @@ on:
 
 jobs:
   ios-smoke:
-    # Runs on either Mac; the first step verifies it's the Mac mini (Xcode 27).
+    # Runs on either Mac; the first step verifies it's the Mac mini (Xcode).
     # Both runners share labels, so we detect the machine at runtime.
     runs-on: [self-hosted, macOS, ARM64]
     
@@ -48,7 +48,7 @@ jobs:
             echo "Running on Mac mini, proceeding with iOS build"
           else
             echo "is_mini=false" >> $GITHUB_OUTPUT
-            echo "Not the Mac mini (no Xcode 27). Skipping iOS build."
+            echo "Not the Mac mini (no Xcode). Skipping iOS build."
           fi
       
       - name: Check out harness
@@ -105,7 +105,7 @@ jobs:
           rm -rf ~/Library/Developer/Xcode/DerivedData/Runner-*
           # Verify patches were applied
           echo "=== Patch verification ==="
-          grep -q "QA harness: Xcode 27" ios/Podfile && echo "Podfile: PATCHED" || echo "Podfile: NOT PATCHED"
+          grep -q "QA harness: Xcode" ios/Podfile && echo "Podfile: PATCHED" || echo "Podfile: NOT PATCHED"
           grep -q "UIApplicationSceneManifest" ios/Runner/Info.plist && echo "Info.plist: PATCHED" || echo "Info.plist: NOT PATCHED"
           [ -f ios/Runner/SceneDelegate.swift ] && echo "SceneDelegate.swift: EXISTS" || echo "SceneDelegate.swift: MISSING"
           grep -q "SceneDelegate.swift in Sources" ios/Runner.xcodeproj/project.pbxproj && echo "pbxproj: PATCHED" || echo "pbxproj: NOT PATCHED"
