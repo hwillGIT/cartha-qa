@@ -20,7 +20,7 @@ on:
       maestro_flow:
         description: 'Maestro flow to run'
         required: false
-        default: 'cartha_ai_mobile/.maestro/flows/00_launch_and_screenshot.yaml'
+        default: '.maestro/flows/00_launch_and_screenshot.yaml'
   push:
     branches: [main]
     paths:
@@ -151,7 +151,7 @@ jobs:
         if: steps.check.outputs.is_mini == 'true'
         run: |
           cd cartha.ai.mobile/cartha_ai_mobile
-          maestro test --device "$SIMULATOR_UDID" "${{ inputs.maestro_flow || 'cartha_ai_mobile/.maestro/flows/00_launch_and_screenshot.yaml' }}"
+          maestro test --device "$SIMULATOR_UDID" "${{ inputs.maestro_flow || '.maestro/flows/00_launch_and_screenshot.yaml' }}"
       
       - name: Upload screenshots
         if: always()
