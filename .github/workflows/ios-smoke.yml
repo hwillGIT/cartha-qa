@@ -102,6 +102,7 @@ jobs:
         run: |
           cd cartha.ai.mobile/cartha_ai_mobile
           flutter clean
+          rm -rf ~/Library/Developer/Xcode/DerivedData/Runner-*
           # Verify patches were applied
           echo "=== Patch verification ==="
           grep -q "QA harness: Xcode 27" ios/Podfile && echo "Podfile: PATCHED" || echo "Podfile: NOT PATCHED"
