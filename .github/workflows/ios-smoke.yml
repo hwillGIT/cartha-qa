@@ -101,6 +101,7 @@ jobs:
         if: steps.check.outputs.is_mini == 'true'
         run: |
           cd cartha.ai.mobile/cartha_ai_mobile
+          flutter clean
           # Verify patches were applied
           echo "=== Patch verification ==="
           grep -q "QA harness: Xcode 27" ios/Podfile && echo "Podfile: PATCHED" || echo "Podfile: NOT PATCHED"
