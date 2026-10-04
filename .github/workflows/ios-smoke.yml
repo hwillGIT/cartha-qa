@@ -43,7 +43,7 @@ jobs:
         run: |
           HOST=$(hostname)
           echo "Hostname: $HOST"
-          if [[ "$HOST" == *"mac-mini"* ]] || [[ "$HOST" == *"MacMini"* ]] || [ -d "/Applications/Xcode.app" ] && xcodebuild -version 2>/dev/null | grep -q "27"; then
+          if [[ "$HOST" == *"mac-mini"* ]] || [[ "$HOST" == *"MacMini"* ]] || [[ "$HOST" == *"Mac-mini"* ]]; then
             echo "is_mini=true" >> $GITHUB_OUTPUT
             echo "Running on Mac mini, proceeding with iOS build"
           else
