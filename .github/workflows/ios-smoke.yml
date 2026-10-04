@@ -84,7 +84,7 @@ jobs:
       - name: Apply iOS test patches
         if: steps.check.outputs.is_mini == 'true'
         run: |
-          ./ios-patches/apply-ios-patches.sh "$GITHUB_WORKSPACE/cartha.ai.mobile/cartha_ai_mobile"
+          bash ./ios-patches/apply-ios-patches.sh "$GITHUB_WORKSPACE/cartha.ai.mobile/cartha_ai_mobile"
       
       - name: Get Flutter dependencies
         if: steps.check.outputs.is_mini == 'true'
@@ -95,7 +95,7 @@ jobs:
       - name: Patch flutter_contacts for scenes
         if: steps.check.outputs.is_mini == 'true'
         run: |
-          ./ios-patches/patch-flutter-contacts.sh
+          bash ./ios-patches/patch-flutter-contacts.sh || echo "patch skipped"
       
       - name: Build iOS simulator app
         if: steps.check.outputs.is_mini == 'true'
