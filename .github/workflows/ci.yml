@@ -101,6 +101,8 @@ jobs:
       - name: Build iOS simulator app
         run: |
           cd cartha.ai.mobile/cartha_ai_mobile
+          flutter clean
+          rm -rf ~/Library/Developer/Xcode/DerivedData/Runner-*
           mkdir -p build/ios_cloud_project_stage
           mv ios/*Cloud.xcodeproj build/ios_cloud_project_stage/ 2>/dev/null || true
           flutter build ios --simulator > /tmp/build.log 2>&1 || BUILD_FAILED=1
