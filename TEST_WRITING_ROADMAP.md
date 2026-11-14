@@ -1,3 +1,5 @@
+**Priority gate.** This roadmap is priority-one work while the suite is unfinished: it runs ahead of any priority-three item. No priority-three work (design exploration, polish, new-feature discussion) starts while a phase of this roadmap is unfinished. Before starting small work, name the unfinished major parts — including ones nobody has stated yet — and finish them first.
+
 # Cartha QA Test Writing Roadmap
 
 **Current Status:** 2 tests written  
